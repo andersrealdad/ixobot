@@ -156,6 +156,7 @@ This file stores important information that should persist across sessions.
 def gateway(
     port: int = typer.Option(18790, "--port", "-p", help="Gateway port"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+    agent_name: str = typer.Option(None, "--agent", "-a", help="Agent profile name"),
 ):
     """Start the nanobot gateway."""
     from nanobot.config.loader import load_config, get_data_dir
@@ -166,22 +167,31 @@ def gateway(
     from nanobot.cron.service import CronService
     from nanobot.cron.types import CronJob
     from nanobot.heartbeat.service import HeartbeatService
-    
+
     if verbose:
         import logging
         logging.basicConfig(level=logging.DEBUG)
-    
+
     console.print(f"{__logo__} Starting nanobot gateway on port {port}...")
-    
+
     config = load_config()
-    
+
+    # Resolve agent profile
+    try:
+        agent_workspace, model, _max_tokens, _temperature = config.resolve_agent(agent_name)
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    if agent_name:
+        console.print(f"[dim]Agent: {agent_name} | Workspace: {agent_workspace}[/dim]")
+
     # Create components
     bus = MessageBus()
-    
+
     # Create provider (supports OpenRouter, Anthropic, OpenAI, Bedrock)
-    api_key = config.get_api_key()
-    api_base = config.get_api_base()
-    model = config.agents.defaults.model
+    api_key = config.get_api_key(model)
+    api_base = config.get_api_base(model)
     is_bedrock = model.startswith("bedrock/")
 
     if not api_key and not is_bedrock:
@@ -192,19 +202,19 @@ def gateway(
     provider = LiteLLMProvider(
         api_key=api_key,
         api_base=api_base,
-        default_model=config.agents.defaults.model
+        default_model=model,
     )
-    
+
     # Create cron service first (callback set after agent creation)
     cron_store_path = get_data_dir() / "cron" / "jobs.json"
     cron = CronService(cron_store_path)
-    
+
     # Create agent with cron service
     agent = AgentLoop(
         bus=bus,
         provider=provider,
-        workspace=config.workspace_path,
-        model=config.agents.defaults.model,
+        workspace=agent_workspace,
+        model=model,
         max_iterations=config.agents.defaults.max_tool_iterations,
         brave_api_key=config.tools.web.search.api_key or None,
         exec_config=config.tools.exec,
@@ -237,7 +247,7 @@ def gateway(
         return await agent.process_direct(prompt, session_key="heartbeat")
     
     heartbeat = HeartbeatService(
-        workspace=config.workspace_path,
+        workspace=agent_workspace,
         on_heartbeat=on_heartbeat,
         interval_s=30 * 60,  # 30 minutes
         enabled=True
@@ -284,66 +294,83 @@ def gateway(
 
 @app.command()
 def agent(
+    name: str = typer.Argument(None, help="Agent profile name (e.g. 'dario', 'librarian')"),
     message: str = typer.Option(None, "--message", "-m", help="Message to send to the agent"),
-    session_id: str = typer.Option("cli:default", "--session", "-s", help="Session ID"),
+    session_id: str = typer.Option(None, "--session", "-s", help="Session ID"),
+    workspace: str = typer.Option(None, "--workspace", "-w", help="Workspace path override"),
 ):
     """Interact with the agent directly."""
     from nanobot.config.loader import load_config
     from nanobot.bus.queue import MessageBus
     from nanobot.providers.litellm_provider import LiteLLMProvider
     from nanobot.agent.loop import AgentLoop
-    
+
     config = load_config()
-    
-    api_key = config.get_api_key()
-    api_base = config.get_api_base()
-    model = config.agents.defaults.model
+
+    # Resolve agent profile
+    try:
+        agent_workspace, model, _max_tokens, _temperature = config.resolve_agent(name, workspace)
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    # Default session_id based on agent name
+    if session_id is None:
+        session_id = f"cli:{name or 'default'}"
+
+    api_key = config.get_api_key(model)
+    api_base = config.get_api_base(model)
     is_bedrock = model.startswith("bedrock/")
 
     if not api_key and not is_bedrock:
         console.print("[red]Error: No API key configured.[/red]")
         raise typer.Exit(1)
 
+    if name:
+        console.print(f"[dim]Agent: {name} | Workspace: {agent_workspace} | Model: {model}[/dim]")
+
     bus = MessageBus()
     provider = LiteLLMProvider(
         api_key=api_key,
         api_base=api_base,
-        default_model=config.agents.defaults.model
+        default_model=model,
     )
-    
+
     agent_loop = AgentLoop(
         bus=bus,
         provider=provider,
-        workspace=config.workspace_path,
+        workspace=agent_workspace,
+        model=model,
         brave_api_key=config.tools.web.search.api_key or None,
         exec_config=config.tools.exec,
         restrict_to_workspace=config.tools.restrict_to_workspace,
     )
-    
+
     if message:
         # Single message mode
         async def run_once():
             response = await agent_loop.process_direct(message, session_id)
             console.print(f"\n{__logo__} {response}")
-        
+
         asyncio.run(run_once())
     else:
         # Interactive mode
-        console.print(f"{__logo__} Interactive mode (Ctrl+C to exit)\n")
-        
+        label = f" ({name})" if name else ""
+        console.print(f"{__logo__} Interactive mode{label} (Ctrl+C to exit)\n")
+
         async def run_interactive():
             while True:
                 try:
                     user_input = console.input("[bold blue]You:[/bold blue] ")
                     if not user_input.strip():
                         continue
-                    
+
                     response = await agent_loop.process_direct(user_input, session_id)
                     console.print(f"\n{__logo__} {response}\n")
                 except KeyboardInterrupt:
                     console.print("\nGoodbye!")
                     break
-        
+
         asyncio.run(run_interactive())
 
 
@@ -663,6 +690,25 @@ def status():
         console.print(f"Gemini API: {'[green]✓[/green]' if has_gemini else '[dim]not set[/dim]'}")
         vllm_status = f"[green]✓ {config.providers.vllm.api_base}[/green]" if has_vllm else "[dim]not set[/dim]"
         console.print(f"vLLM/Local: {vllm_status}")
+
+        # Show agent profiles
+        profiles = config.agents.profiles
+        if profiles:
+            console.print()
+            table = Table(title="Agent Profiles")
+            table.add_column("Name", style="cyan")
+            table.add_column("Workspace")
+            table.add_column("Model", style="dim")
+            table.add_column("Status")
+
+            for pname, profile in sorted(profiles.items()):
+                ws = Path(profile.workspace).expanduser()
+                exists = ws.exists()
+                status_str = "[green]OK[/green]" if exists else "[red]MISSING[/red]"
+                model_str = profile.model or f"[dim]{config.agents.defaults.model}[/dim]"
+                table.add_row(pname, str(ws), model_str, status_str)
+
+            console.print(table)
 
 
 if __name__ == "__main__":

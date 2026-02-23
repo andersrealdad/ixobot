@@ -56,9 +56,16 @@ class AgentDefaults(BaseModel):
     max_tool_iterations: int = 20
 
 
+class AgentProfile(BaseModel):
+    """Named agent profile configuration."""
+    workspace: str  # Required workspace path
+    model: str | None = None  # Optional model override
+
+
 class AgentsConfig(BaseModel):
     """Agent configuration."""
     defaults: AgentDefaults = Field(default_factory=AgentDefaults)
+    profiles: dict[str, AgentProfile] = Field(default_factory=dict)
 
 
 class ProviderConfig(BaseModel):
@@ -109,6 +116,11 @@ class ToolsConfig(BaseModel):
     restrict_to_workspace: bool = False  # If true, restrict all tool access to workspace directory
 
 
+class LoggingConfig(BaseModel):
+    """Logging configuration."""
+    level: str = "WARNING"
+
+
 class Config(BaseSettings):
     """Root configuration for nanobot."""
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
@@ -116,11 +128,33 @@ class Config(BaseSettings):
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
-    
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
+
     @property
     def workspace_path(self) -> Path:
         """Get expanded workspace path."""
         return Path(self.agents.defaults.workspace).expanduser()
+
+    def resolve_agent(self, name: str | None = None, workspace_override: str | None = None) -> tuple[Path, str, int, float]:
+        """Resolve agent config by name, returning (workspace, model, max_tokens, temperature).
+
+        Priority: workspace_override > named profile > defaults.
+        Raises typer.Exit if named profile not found.
+        """
+        defaults = self.agents.defaults
+
+        if workspace_override:
+            return (Path(workspace_override).expanduser(), defaults.model, defaults.max_tokens, defaults.temperature)
+
+        if name:
+            profile = self.agents.profiles.get(name)
+            if not profile:
+                available = ", ".join(sorted(self.agents.profiles.keys())) or "(none)"
+                raise ValueError(f"Unknown agent profile '{name}'. Available: {available}")
+            model = profile.model or defaults.model
+            return (Path(profile.workspace).expanduser(), model, defaults.max_tokens, defaults.temperature)
+
+        return (self.workspace_path, defaults.model, defaults.max_tokens, defaults.temperature)
     
     def _match_provider(self, model: str | None = None) -> ProviderConfig | None:
         """Match a provider based on model name."""
