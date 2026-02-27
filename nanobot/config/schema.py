@@ -39,12 +39,25 @@ class DiscordConfig(BaseModel):
     intents: int = 37377  # GUILDS + GUILD_MESSAGES + DIRECT_MESSAGES + MESSAGE_CONTENT
 
 
+class NextcloudTalkConfig(BaseModel):
+    """Nextcloud Talk bot channel configuration."""
+    enabled: bool = False
+    server_url: str = ""  # e.g. "http://superstation:8082"
+    bot_secret: str = ""  # Shared secret from occ talk:bot:install
+    port: int = 18793  # Local webhook listener port
+    openclaw_url: str = ""  # e.g. "http://stacks.tailace3a6.ts.net:18789"
+    openclaw_token: str = ""  # Gateway auth token
+    reply_as: str = "Astrid"  # NC username to post replies as (app password fetched from vault)
+    allow_from: list[str] = Field(default_factory=list)
+
+
 class ChannelsConfig(BaseModel):
     """Configuration for chat channels."""
     whatsapp: WhatsAppConfig = Field(default_factory=WhatsAppConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     discord: DiscordConfig = Field(default_factory=DiscordConfig)
     feishu: FeishuConfig = Field(default_factory=FeishuConfig)
+    nextcloud_talk: NextcloudTalkConfig = Field(default_factory=NextcloudTalkConfig)
 
 
 class AgentDefaults(BaseModel):

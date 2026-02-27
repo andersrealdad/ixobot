@@ -77,6 +77,17 @@ class ChannelManager:
                 logger.info("Feishu channel enabled")
             except ImportError as e:
                 logger.warning(f"Feishu channel not available: {e}")
+
+        # Nextcloud Talk channel
+        if self.config.channels.nextcloud_talk.enabled:
+            try:
+                from nanobot.channels.nextcloud_talk import NextcloudTalkChannel
+                self.channels["nextcloud_talk"] = NextcloudTalkChannel(
+                    self.config.channels.nextcloud_talk, self.bus
+                )
+                logger.info("Nextcloud Talk channel enabled")
+            except ImportError as e:
+                logger.warning(f"Nextcloud Talk channel not available: {e}")
     
     async def start_all(self) -> None:
         """Start WhatsApp channel and the outbound dispatcher."""
