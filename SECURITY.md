@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in nanobot, please report it by:
+If you discover a security vulnerability in IXO-Synth, please report it by:
 
 1. **DO NOT** open a public GitHub issue
 2. Create a private security advisory on GitHub or contact the repository maintainers
@@ -109,7 +109,7 @@ pip install pip-audit
 pip-audit
 
 # Update to latest secure versions
-pip install --upgrade nanobot-ai
+pip install --upgrade ixo-synth
 ```
 
 For Node.js dependencies (WhatsApp bridge):
@@ -123,7 +123,7 @@ npm audit fix
 - Keep `litellm` updated to the latest version for security fixes
 - We've updated `ws` to `>=8.17.1` to fix DoS vulnerability
 - Run `pip-audit` or `npm audit` regularly
-- Subscribe to security advisories for nanobot and its dependencies
+- Subscribe to security advisories for IXO-Synth and its dependencies
 
 ### 7. Production Deployment
 
@@ -133,7 +133,7 @@ For production use:
    ```bash
    # Run in a container or VM
    docker run --rm -it python:3.11
-   pip install nanobot-ai
+   pip install ixo-synth
    ```
 
 2. **Use a Dedicated User**
@@ -163,7 +163,7 @@ For production use:
 6. **Regular Updates**
    ```bash
    # Check for updates weekly
-   pip install --upgrade nanobot-ai
+   pip install --upgrade ixo-synth
    ```
 
 ### 8. Development vs Production
@@ -238,7 +238,7 @@ If you suspect a security breach:
 
 ## Security Checklist
 
-Before deploying nanobot:
+Before deploying IXO-Synth:
 
 - [ ] API keys stored securely (not in code)
 - [ ] Config file permissions set to 0600
@@ -253,11 +253,13 @@ Before deploying nanobot:
 
 ## Updates
 
-**Last Updated**: 2026-02-03
+**Last Updated**: 2026-03-01
 
 For the latest security updates and announcements, check:
-- GitHub Security Advisories: https://github.com/HKUDS/nanobot/security/advisories
-- Release Notes: https://github.com/HKUDS/nanobot/releases
+- GitHub Security Advisories: https://github.com/IxoSynth/IXO-Synth/security/advisories
+- Release Notes: https://github.com/IxoSynth/IXO-Synth/releases
+
+Upstream security advisories: https://github.com/HKUDS/nanobot/security/advisories
 
 ## License
 
