@@ -7,9 +7,17 @@ Built on [nanobot](https://github.com/HKUDS/nanobot) by HKUDS.
 ## Quick Start
 
 ```bash
-pip install -e .
+pip install ixo-synth
 nanobot onboard
 nanobot agent -m "hello"
+```
+
+For development:
+
+```bash
+git clone https://github.com/IxoSynth/IXO-Synth.git
+cd IXO-Synth
+pip install -e .
 ```
 
 ## What This Does
