@@ -45,9 +45,16 @@ class NextcloudTalkConfig(BaseModel):
     server_url: str = ""  # e.g. "http://superstation:8082"
     bot_secret: str = ""  # Shared secret from occ talk:bot:install
     port: int = 18793  # Local webhook listener port
-    openclaw_url: str = ""  # e.g. "http://stacks.tailace3a6.ts.net:18789"
+    openclaw_url: str = ""  # e.g. "http://stacks:18789"
     openclaw_token: str = ""  # Gateway auth token
     reply_as: str = "Astrid"  # NC username to post replies as (app password fetched from vault)
+    allow_from: list[str] = Field(default_factory=list)
+
+
+class HttpInboundConfig(BaseModel):
+    """HTTP Inbound channel — receives POST /inbound from Router."""
+    enabled: bool = False
+    port: int = 9881  # HTTP server port
     allow_from: list[str] = Field(default_factory=list)
 
 
@@ -58,6 +65,7 @@ class ChannelsConfig(BaseModel):
     discord: DiscordConfig = Field(default_factory=DiscordConfig)
     feishu: FeishuConfig = Field(default_factory=FeishuConfig)
     nextcloud_talk: NextcloudTalkConfig = Field(default_factory=NextcloudTalkConfig)
+    http_inbound: HttpInboundConfig = Field(default_factory=HttpInboundConfig)
 
 
 class AgentDefaults(BaseModel):
@@ -221,6 +229,9 @@ class Config(BaseSettings):
             return self.providers.zhipu.api_base
         if "vllm" in model:
             return self.providers.vllm.api_base
+        # Fallback: return openai api_base if set (custom OpenAI-compatible proxy)
+        if self.providers.openai.api_base:
+            return self.providers.openai.api_base
         return None
     
     class Config:
