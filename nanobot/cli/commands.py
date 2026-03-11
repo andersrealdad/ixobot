@@ -246,11 +246,12 @@ def gateway(
         """Execute heartbeat through the agent."""
         return await agent.process_direct(prompt, session_key="heartbeat")
     
-    # Derive agent name for task_queue: CLI arg > config dir name > None
+    # Derive agent name for task_queue: CLI arg > env var > config dir name > None
+    import os
     heartbeat_agent_name = agent_name
     if not heartbeat_agent_name:
-        # Infer from NANOBOT_CONFIG path: ~/agents/dario/config.json -> "dario"
-        import os
+        heartbeat_agent_name = os.environ.get("NANOBOT_AGENT_NAME", "")
+    if not heartbeat_agent_name:
         config_path = os.environ.get("NANOBOT_CONFIG", "")
         if "/agents/" in config_path:
             heartbeat_agent_name = Path(config_path).parent.name
@@ -258,7 +259,7 @@ def gateway(
     heartbeat = HeartbeatService(
         workspace=agent_workspace,
         on_heartbeat=on_heartbeat,
-        interval_s=30 * 60,  # 30 minutes
+        interval_s=int(os.environ.get("NANOBOT_HEARTBEAT_INTERVAL", 5 * 60)),  # default 5 min
         enabled=True,
         agent_name=heartbeat_agent_name,
     )
