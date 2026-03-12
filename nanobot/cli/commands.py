@@ -1,6 +1,7 @@
 """CLI commands for nanobot."""
 
 import asyncio
+import os
 from pathlib import Path
 
 import typer
@@ -246,19 +247,27 @@ def gateway(
         """Execute heartbeat through the agent."""
         return await agent.process_direct(prompt, session_key="heartbeat")
     
-    # Derive agent name for task_queue: CLI arg > config dir name > None
+    # Derive agent name for task_queue: CLI arg > env var > config dir name > None
+    # NANOBOT_AGENT_NAME: override agent identity for heartbeat registration and task_queue polling.
+    # NANOBOT_HEARTBEAT_INTERVAL: seconds between heartbeat ticks (default 300, range 60-3600).
     heartbeat_agent_name = agent_name
     if not heartbeat_agent_name:
-        # Infer from NANOBOT_CONFIG path: ~/agents/dario/config.json -> "dario"
-        import os
-        config_path = os.environ.get("NANOBOT_CONFIG", "")
-        if "/agents/" in config_path:
-            heartbeat_agent_name = Path(config_path).parent.name
+        heartbeat_agent_name = os.environ.get("NANOBOT_AGENT_NAME", "")
+    if not heartbeat_agent_name:
+        config_path_str = os.environ.get("NANOBOT_CONFIG", "")
+        if "/agents/" in config_path_str:
+            heartbeat_agent_name = Path(config_path_str).parent.name
+
+    try:
+        heartbeat_interval = int(os.environ.get("NANOBOT_HEARTBEAT_INTERVAL", 300))
+    except (ValueError, TypeError):
+        heartbeat_interval = 300
+    heartbeat_interval = max(60, min(3600, heartbeat_interval))
 
     heartbeat = HeartbeatService(
         workspace=agent_workspace,
         on_heartbeat=on_heartbeat,
-        interval_s=30 * 60,  # 30 minutes
+        interval_s=heartbeat_interval,
         enabled=True,
         agent_name=heartbeat_agent_name,
     )
@@ -277,7 +286,7 @@ def gateway(
     if cron_status["jobs"] > 0:
         console.print(f"[green]✓[/green] Cron: {cron_status['jobs']} scheduled jobs")
     
-    console.print(f"[green]✓[/green] Heartbeat: every 30m")
+    console.print(f"[green]✓[/green] Heartbeat: every {heartbeat_interval // 60}m")
     
     async def run():
         try:
