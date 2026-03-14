@@ -7,6 +7,8 @@ from typing import Any, Callable, Coroutine
 
 from loguru import logger
 
+from nanobot.heartbeat.open_brain import capture_discussion, capture_task, search_context
+
 # Default interval: 30 minutes
 DEFAULT_HEARTBEAT_INTERVAL_S = 30 * 60
 
@@ -402,15 +404,35 @@ class HeartbeatService:
                         logger.debug(f"Heartbeat: task #{t['id']} already claimed by another agent")
 
                 if claimed and self.on_heartbeat:
+                    # Open Brain: search for similar past solutions
+                    task_descriptions = " ".join(
+                        t.get("title", "") + " " + (t.get("description") or "")
+                        for t in claimed
+                    )
+                    brain_context = search_context(task_descriptions, self.agent_name)
+
                     prompt = TASK_QUEUE_PROMPT.format(
                         count=len(claimed),
                         tasks=_format_tasks_for_prompt(claimed),
                     )
+                    if brain_context:
+                        prompt = brain_context + "\n\n" + prompt
+
                     try:
                         response = await self.on_heartbeat(prompt)
                         logger.info(f"Heartbeat: processed {len(claimed)} task(s) from queue")
                         # Update completed tasks
                         self._mark_tasks_done(claimed, response)
+                        # Open Brain: capture completed tasks
+                        for t in claimed:
+                            capture_task(
+                                task_id=t["id"],
+                                title=t["title"],
+                                description=t.get("description"),
+                                response=response,
+                                agent_name=self.agent_name,
+                                priority=t.get("priority"),
+                            )
                     except Exception as e:
                         logger.error(f"Heartbeat: task_queue execution failed: {e}")
                         self._mark_tasks_failed(claimed, str(e))
@@ -452,6 +474,7 @@ class HeartbeatService:
                         response = await self.on_heartbeat(prompt)
                         _set_discussion_proposal(self.shared_memory_db, disc_id, response)
                         _add_discussion_comment(self.shared_memory_db, disc_id, self.agent_name, "synthesizer", response)
+                        capture_discussion(disc_id, disc["title"], self.agent_name, "synthesizer", response)
                         logger.info(f"Discussion #{disc_id}: proposal ready for approval")
                     except Exception as e:
                         logger.error(f"Discussion #{disc_id}: synthesis failed: {e}")
@@ -471,6 +494,7 @@ class HeartbeatService:
                     try:
                         response = await self.on_heartbeat(prompt)
                         _add_discussion_comment(self.shared_memory_db, disc_id, self.agent_name, "reviewer", response)
+                        capture_discussion(disc_id, disc["title"], self.agent_name, "reviewer", response)
                         logger.info(f"Discussion #{disc_id}: {self.agent_name} commented")
                     except Exception as e:
                         logger.error(f"Discussion #{disc_id}: comment failed: {e}")
