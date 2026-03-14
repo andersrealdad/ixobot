@@ -7,7 +7,7 @@ from typing import Any, Callable, Coroutine
 
 from loguru import logger
 
-from nanobot.heartbeat.open_brain import capture_discussion, capture_task, search_context
+from nanobot.heartbeat.open_brain import capture_discussion, capture_task, recall_promoted_vault, search_context
 
 # Default interval: 30 minutes
 DEFAULT_HEARTBEAT_INTERVAL_S = 30 * 60
@@ -441,6 +441,10 @@ class HeartbeatService:
         if self.agent_name:
             await self._check_discussions()
 
+        # --- Inject promoted vault memories into HEARTBEAT.md ---
+        if has_work and self.agent_name:
+            self._inject_vault_into_heartbeat()
+
         # --- Update agent_heartbeat in shared-memory.db ---
         status = "active" if has_work else "online"
         task_desc = "processing tasks" if has_work else None
@@ -449,6 +453,24 @@ class HeartbeatService:
         if not has_work:
             logger.debug("Heartbeat: no tasks (HEARTBEAT.md empty, queue empty)")
     
+    def _inject_vault_into_heartbeat(self) -> None:
+        """Append promoted vault memories to HEARTBEAT.md after task processing."""
+        promoted = recall_promoted_vault(self.agent_name)
+        if not promoted:
+            return
+
+        heartbeat_file = self._get_heartbeat_path()
+        try:
+            existing = heartbeat_file.read_text(encoding="utf-8") if heartbeat_file.exists() else ""
+            # Avoid duplicate injection: skip if section already present
+            if "### Vault — Promoted Insights" in existing:
+                return
+            with heartbeat_file.open("a", encoding="utf-8") as f:
+                f.write(f"\n\n{promoted}")
+            logger.debug("Vault: injected promoted memories into HEARTBEAT.md")
+        except Exception as e:
+            logger.debug(f"Vault: HEARTBEAT.md injection failed: {e}")
+
     async def _check_discussions(self) -> None:
         """Check for open discussions and contribute or synthesize."""
         discussions = _fetch_open_discussions(self.shared_memory_db, self.agent_name)

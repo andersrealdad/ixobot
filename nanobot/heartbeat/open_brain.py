@@ -4,6 +4,8 @@ Provides hooks for the heartbeat service to:
 1. Search similar past solutions before starting a task (context enrichment)
 2. Capture completed tasks as thoughts (knowledge accumulation)
 3. Capture discussion contributions (collective intelligence)
+4. Recall vault memories for agent context (importance + recency, SQL-only)
+5. Fetch promoted vault memories for heartbeat injection
 
 Connects to PostgreSQL (stacks:5432) + embedding server (localhost:8201).
 Fails gracefully — never blocks the heartbeat loop.
@@ -284,3 +286,113 @@ def capture_discussion(
     except Exception as e:
         logger.debug(f"Open Brain: capture discussion failed: {e}")
         return False
+
+
+# ---------------------------------------------------------------------------
+# Hook 4: Recall vault memories for ContextBuilder (SQL-only, no embedding)
+# ---------------------------------------------------------------------------
+
+VAULT_CONTEXT_LIMIT = int(os.environ.get("VAULT_CONTEXT_LIMIT", "5"))
+VAULT_MIN_IMPORTANCE = int(os.environ.get("VAULT_MIN_IMPORTANCE", "5"))
+
+
+def recall_vault_context(agent_name: str | None = None) -> str:
+    """Recall top vault memories for the agent's context window.
+
+    Queries vault.memories by importance + recency (no vector search — embedding
+    dimension not yet aligned with embed server). Returns formatted string for
+    injection into system prompt, or empty string on failure.
+
+    Args:
+        agent_name: Filter by agent_id (also includes agent_id IS NULL for
+                    global memories). Pass None to get global memories only.
+    """
+    if not ENABLED:
+        return ""
+
+    conn = _get_conn()
+    if not conn:
+        return ""
+
+    try:
+        import psycopg2.extras
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """SELECT category, topic, summary, importance, agent_id, tags, created_at
+                   FROM vault.memories
+                   WHERE consumed_by IS NULL
+                     AND importance >= %s
+                     AND (agent_id = %s OR agent_id IS NULL)
+                   ORDER BY importance DESC, created_at DESC
+                   LIMIT %s""",
+                (VAULT_MIN_IMPORTANCE, agent_name, VAULT_CONTEXT_LIMIT),
+            )
+            rows = cur.fetchall()
+
+        if not rows:
+            return ""
+
+        lines = ["## Vault Insights", ""]
+        for r in rows:
+            tag_str = f" [{', '.join(r['tags'])}]" if r.get("tags") else ""
+            lines.append(
+                f"**[{r['category']}]** (importance={r['importance']}{tag_str}): {r['summary']}"
+            )
+        lines.append("")
+
+        logger.debug(f"Vault: recalled {len(rows)} memories for agent '{agent_name}'")
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.debug(f"Vault: recall failed: {e}")
+        return ""
+
+
+# ---------------------------------------------------------------------------
+# Hook 5: Promoted vault memories for heartbeat injection
+# ---------------------------------------------------------------------------
+
+VAULT_HEARTBEAT_LIMIT = int(os.environ.get("VAULT_HEARTBEAT_LIMIT", "3"))
+
+
+def recall_promoted_vault(agent_name: str | None = None) -> str:
+    """Fetch recently promoted vault memories for heartbeat context.
+
+    Returns formatted string listing the top promoted memories, or empty
+    string if none found or vault is unavailable.
+    """
+    if not ENABLED:
+        return ""
+
+    conn = _get_conn()
+    if not conn:
+        return ""
+
+    try:
+        import psycopg2.extras
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """SELECT category, topic, summary, importance, promoted_at
+                   FROM vault.memories
+                   WHERE promoted_at IS NOT NULL
+                     AND consumed_by IS NULL
+                     AND (agent_name = %s OR agent_name IS NULL OR %s IS NULL)
+                   ORDER BY promoted_at DESC
+                   LIMIT %s""",
+                (agent_name, agent_name, VAULT_HEARTBEAT_LIMIT),
+            )
+            rows = cur.fetchall()
+
+        if not rows:
+            return ""
+
+        lines = ["### Vault — Promoted Insights", ""]
+        for r in rows:
+            lines.append(f"- **[{r['category']}]** {r['summary']} (importance={r['importance']})")
+        lines.append("")
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        logger.debug(f"Vault: promoted recall failed: {e}")
+        return ""

@@ -128,13 +128,28 @@ class MemoryStore:
         )
         return context
 
+    def get_vault_context(self) -> str:
+        """Query vault.memories for high-importance memories relevant to this agent.
+
+        Uses SQL-only recall (importance + recency). Returns formatted 'Vault Insights'
+        section, or empty string if vault is unavailable or empty.
+        """
+        try:
+            from nanobot.heartbeat.open_brain import recall_vault_context, ENABLED
+            if not ENABLED:
+                return ""
+        except ImportError:
+            return ""
+
+        return recall_vault_context(self.agent_name)
+
     def get_memory_context(self) -> str:
         """
         Get memory context for the agent.
 
         Returns:
             Formatted memory context including long-term memory, recent notes,
-            and Open Brain semantic recall.
+            Open Brain semantic recall, and vault insights.
         """
         parts = []
 
@@ -152,5 +167,10 @@ class MemoryStore:
         brain = self.get_brain_context()
         if brain:
             parts.append(brain)
+
+        # Vault — high-importance structured memories
+        vault = self.get_vault_context()
+        if vault:
+            parts.append(vault)
 
         return "\n\n".join(parts) if parts else ""
