@@ -66,6 +66,7 @@ class VaultWatcher:
         gitea_token: str | None = None,
     ):
         self.queue = queue
+        self._loop: asyncio.AbstractEventLoop | None = None
         self.db = shared_memory_db or DEFAULT_SHARED_MEMORY_DB
         self.agent_homes = agent_homes or DEFAULT_AGENT_HOMES
         self.gitea_url = gitea_url or os.environ.get("GITEA_URL", "http://ubsfuru:3001")
@@ -82,6 +83,7 @@ class VaultWatcher:
 
     async def run(self) -> None:
         """Start all watchers concurrently. Runs until cancelled."""
+        self._loop = asyncio.get_running_loop()
         logger.info("VaultWatcher: starting all source watchers")
         async with asyncio.TaskGroup() as tg:
             tg.create_task(self._watch_sqlite_loop(), name="sqlite-watcher")
@@ -94,7 +96,7 @@ class VaultWatcher:
     async def _watch_sqlite_loop(self) -> None:
         while True:
             try:
-                await asyncio.get_event_loop().run_in_executor(None, self._poll_sqlite)
+                await asyncio.get_running_loop().run_in_executor(None, self._poll_sqlite)
             except Exception as e:
                 logger.warning(f"VaultWatcher sqlite poll error: {e}")
             await asyncio.sleep(POLL_INTERVAL_SQLITE)
@@ -115,8 +117,7 @@ class VaultWatcher:
 
     def _emit(self, obs: RawObservation) -> None:
         """Thread-safe emit to asyncio queue."""
-        loop = asyncio.get_event_loop()
-        loop.call_soon_threadsafe(self.queue.put_nowait, obs)
+        self._loop.call_soon_threadsafe(self.queue.put_nowait, obs)
 
     def _poll_message_bus(self, conn: sqlite3.Connection) -> None:
         rows = conn.execute(
@@ -230,7 +231,7 @@ class VaultWatcher:
     async def _watch_files_loop(self) -> None:
         while True:
             try:
-                await asyncio.get_event_loop().run_in_executor(None, self._poll_memory_files)
+                await asyncio.get_running_loop().run_in_executor(None, self._poll_memory_files)
             except Exception as e:
                 logger.warning(f"VaultWatcher file poll error: {e}")
             await asyncio.sleep(POLL_INTERVAL_FILES)
@@ -315,7 +316,7 @@ class VaultWatcher:
     async def _heartbeat_loop(self) -> None:
         while True:
             try:
-                await asyncio.get_event_loop().run_in_executor(None, self._register_heartbeat)
+                await asyncio.get_running_loop().run_in_executor(None, self._register_heartbeat)
             except Exception as e:
                 logger.debug(f"VaultWatcher heartbeat error: {e}")
             await asyncio.sleep(HEARTBEAT_INTERVAL)
