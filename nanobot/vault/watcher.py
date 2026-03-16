@@ -333,6 +333,12 @@ class VaultWatcher:
                        status = 'active',
                        last_heartbeat = CURRENT_TIMESTAMP""",
             )
+            # Prune stale session heartbeats (claude-code sessions older than 24h)
+            conn.execute(
+                """DELETE FROM agent_heartbeat
+                   WHERE agent_type = 'claude-code'
+                     AND last_heartbeat < datetime('now', '-24 hours')""",
+            )
             conn.commit()
             conn.close()
         except Exception as e:
