@@ -38,6 +38,9 @@ brain = [
     "psycopg2-binary>=2.9.0",
     "pgvector>=0.3.0",
 ]
+matrix = [
+    "matrix-nio[e2e]>=0.24.0",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",

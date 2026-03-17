@@ -51,6 +51,16 @@ class NextcloudTalkConfig(BaseModel):
     allow_from: list[str] = Field(default_factory=list)
 
 
+class MatrixConfig(BaseModel):
+    """Matrix channel configuration."""
+    enabled: bool = False
+    homeserver: str = ""  # e.g. "http://superstation:8008"
+    user_id: str = ""  # e.g. "@dario:superstation"
+    access_token: str = ""  # Access token for the bot user
+    allow_from: list[str] = Field(default_factory=list)  # Allowed Matrix user IDs
+    rooms: list[str] = Field(default_factory=list)  # Restrict to these room IDs (empty = all)
+
+
 class HttpInboundConfig(BaseModel):
     """HTTP Inbound channel — receives POST /inbound from Router."""
     enabled: bool = False
@@ -65,6 +75,7 @@ class ChannelsConfig(BaseModel):
     discord: DiscordConfig = Field(default_factory=DiscordConfig)
     feishu: FeishuConfig = Field(default_factory=FeishuConfig)
     nextcloud_talk: NextcloudTalkConfig = Field(default_factory=NextcloudTalkConfig)
+    matrix: MatrixConfig = Field(default_factory=MatrixConfig)
     http_inbound: HttpInboundConfig = Field(default_factory=HttpInboundConfig)
 
 
