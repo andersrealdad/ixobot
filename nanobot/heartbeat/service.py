@@ -133,6 +133,12 @@ AGENT_EXPERTISE = {
     "robocop": ["security", "compliance", "ports", "secrets"],
     "overseer": ["quality", "review", "standards"],
     "astrid": ["coordination", "context", "orchestration"],
+    "journalist": ["narrative", "editorial", "articles", "briefings"],
+    "archaeologist": ["provenance", "gaps", "schema", "archaeology"],
+    "agent-smith": ["remediation", "execution", "fixes"],
+    "agent-k": ["pipeline", "integrity", "monitoring", "validation"],
+    "simon-sinet": ["workflow", "nodes", "staffing", "crew-training"],
+    "svein-godal": ["brand", "metrics", "measurement", "content-review"],
 }
 
 # How many unique agent comments before a discussion can be synthesized
@@ -157,7 +163,26 @@ Respond with your analysis. Focus on:
 3. What are the risks of acting vs. not acting?
 4. Any dependencies or things others missed?
 
-Keep it concise. End with a clear recommendation."""
+Keep it concise. End with a clear recommendation.
+
+## REQUIRED: Flag & Dependency Mapping
+
+After your analysis, you MUST include this structured block at the end:
+
+```flags
+severity: --flag | --flagpole | --otto
+affects: [list of build order IDs this touches, e.g. 005, 019, 020]
+type: BLOCKED | HOLD | PREREQUISITE | EXECUTION_GAP | RESOLVED | NONE
+summary: one-line summary of your objection or approval
+```
+
+Severity guide:
+- `--flag` — worth noting, not urgent
+- `--flagpole` — needs attention soon, should persist in unread rollup
+- `--otto` — critical, wake Anders up
+
+If you have no objection, use `type: NONE` and `severity: --flag`.
+Build orders are in garage/buildorders/ (001-021). Map your concerns to the ones affected."""
 
 DISCUSSION_SYNTHESIZE_PROMPT = """All agents have weighed in on this discussion. Synthesize their input into a single actionable proposal for Anders to approve or reject.
 
@@ -176,7 +201,20 @@ Write a proposal that:
 4. Notes any dissenting opinions or risks
 5. Estimates scope (small/medium/large change)
 
-Format as a clean proposal Anders can approve with one word."""
+Format as a clean proposal Anders can approve with one word.
+
+## REQUIRED: Consolidated Flag Summary
+
+After the proposal, include a consolidated flags section that merges all agent flags:
+
+```flags-summary
+total_flags: N
+blockers: [list of --flagpole and --otto items with agent name + summary]
+affected_build_orders: [deduplicated list of all build order IDs mentioned by any agent]
+unresolved: [items where type is BLOCKED or HOLD — these persist in unread rollup]
+```
+
+This summary feeds directly into Buildboard (#020) and the handoff unread rollup (#021)."""
 
 
 def _fetch_open_discussions(db_path: Path, agent_name: str, limit: int = 2) -> list[dict]:
@@ -278,6 +316,98 @@ def _set_discussion_proposal(db_path: Path, discussion_id: int, proposal: str) -
     except Exception as e:
         logger.warning(f"Heartbeat: failed to set proposal on discussion {discussion_id}: {e}")
         return False
+
+
+# ---------------------------------------------------------------------------
+# Message bus — agents read messages addressed to them
+# ---------------------------------------------------------------------------
+
+# Max messages to process per heartbeat tick
+MAX_MESSAGES_PER_TICK = 5
+
+MESSAGE_BUS_PROMPT = """You have {count} unread message(s) from other agents. Read and act on them.
+
+{messages}
+
+For each message:
+1. Read and understand the content
+2. If it requires action, take it or note what you need to do
+3. If it's informational, acknowledge it
+4. If it contains a matrix_room_id or thread_event_id, respond there
+
+Summarize what you did with each message."""
+
+
+def _fetch_unread_messages(db_path: Path, agent_name: str, limit: int = MAX_MESSAGES_PER_TICK) -> list[dict]:
+    """Fetch unread messages from message_bus for this agent.
+
+    Matches messages addressed to:
+    - This specific agent (to_agent = agent_name)
+    - All agents (to_agent = '*' or to_agent = 'all')
+    """
+    if not db_path.exists():
+        return []
+    try:
+        conn = sqlite3.connect(str(db_path), timeout=5)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """SELECT id, from_agent, to_agent, channel, message, metadata, created_at
+               FROM message_bus
+               WHERE (to_agent = ? OR to_agent = '*' OR to_agent = 'all')
+                 AND (read_by IS NULL OR read_by = '' OR read_by = '[]'
+                      OR read_by NOT LIKE ?)
+               ORDER BY created_at ASC
+               LIMIT ?""",
+            (agent_name, f'%{agent_name}%', limit),
+        ).fetchall()
+        messages = [dict(r) for r in rows]
+        conn.close()
+        return messages
+    except Exception as e:
+        logger.warning(f"Heartbeat: failed to read message_bus: {e}")
+        return []
+
+
+def _mark_messages_read(db_path: Path, message_ids: list[int], agent_name: str) -> None:
+    """Mark messages as read by this agent (appends to read_by JSON array)."""
+    if not message_ids:
+        return
+    try:
+        conn = sqlite3.connect(str(db_path), timeout=5)
+        for msg_id in message_ids:
+            # Get current read_by
+            row = conn.execute(
+                "SELECT read_by FROM message_bus WHERE id = ?", (msg_id,)
+            ).fetchone()
+            current = row[0] if row and row[0] else "[]"
+            import json
+            try:
+                readers = json.loads(current)
+            except (json.JSONDecodeError, TypeError):
+                readers = []
+            if agent_name not in readers:
+                readers.append(agent_name)
+            conn.execute(
+                "UPDATE message_bus SET read_by = ? WHERE id = ?",
+                (json.dumps(readers), msg_id),
+            )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Heartbeat: failed to mark messages read: {e}")
+
+
+def _format_messages_for_prompt(messages: list[dict]) -> str:
+    """Format message_bus rows into a readable prompt section."""
+    lines = []
+    for m in messages:
+        lines.append(f"### Message #{m['id']} from {m['from_agent']} ({m['channel']})")
+        lines.append(f"**Sent:** {m['created_at']}")
+        if m.get("metadata"):
+            lines.append(f"**Metadata:** {m['metadata']}")
+        lines.append(f"\n{m['message']}")
+        lines.append("")
+    return "\n".join(lines)
 
 
 def _format_comments_for_prompt(comments: list[dict]) -> str:
@@ -437,7 +567,11 @@ class HeartbeatService:
                         logger.error(f"Heartbeat: task_queue execution failed: {e}")
                         self._mark_tasks_failed(claimed, str(e))
 
-        # --- Source 3: Open discussions needing this agent's input ---
+        # --- Source 3: Unread messages in message_bus ---
+        if self.agent_name:
+            await self._check_messages()
+
+        # --- Source 4: Open discussions needing this agent's input ---
         if self.agent_name:
             await self._check_discussions()
 
@@ -470,6 +604,29 @@ class HeartbeatService:
             logger.debug("Vault: injected promoted memories into HEARTBEAT.md")
         except Exception as e:
             logger.debug(f"Vault: HEARTBEAT.md injection failed: {e}")
+
+    async def _check_messages(self) -> None:
+        """Check message_bus for unread messages and process them."""
+        messages = _fetch_unread_messages(self.shared_memory_db, self.agent_name)
+        if not messages:
+            return
+
+        logger.info(f"Heartbeat: {len(messages)} unread message(s) for {self.agent_name}")
+        msg_ids = [m["id"] for m in messages]
+
+        # Mark read FIRST to avoid re-processing on next tick
+        _mark_messages_read(self.shared_memory_db, msg_ids, self.agent_name)
+
+        if self.on_heartbeat:
+            prompt = MESSAGE_BUS_PROMPT.format(
+                count=len(messages),
+                messages=_format_messages_for_prompt(messages),
+            )
+            try:
+                await self.on_heartbeat(prompt)
+                logger.info(f"Heartbeat: processed {len(messages)} message(s) from bus")
+            except Exception as e:
+                logger.error(f"Heartbeat: message_bus processing failed: {e}")
 
     async def _check_discussions(self) -> None:
         """Check for open discussions and contribute or synthesize."""

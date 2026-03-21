@@ -210,6 +210,12 @@ def gateway(
     cron_store_path = get_data_dir() / "cron" / "jobs.json"
     cron = CronService(cron_store_path)
 
+    # Convert mcpServers config to plain dicts for the client
+    mcp_config = {
+        name: srv.model_dump()
+        for name, srv in config.mcp_servers.items()
+    } if config.mcp_servers else {}
+
     # Create agent with cron service
     agent = AgentLoop(
         bus=bus,
@@ -221,6 +227,7 @@ def gateway(
         exec_config=config.tools.exec,
         cron_service=cron,
         restrict_to_workspace=config.tools.restrict_to_workspace,
+        mcp_servers=mcp_config,
     )
     
     # Set cron callback (needs agent)
@@ -357,6 +364,12 @@ def agent(
         default_model=model,
     )
 
+    # Convert mcpServers config to plain dicts for the client
+    mcp_config = {
+        name: srv.model_dump()
+        for name, srv in config.mcp_servers.items()
+    } if config.mcp_servers else {}
+
     agent_loop = AgentLoop(
         bus=bus,
         provider=provider,
@@ -365,6 +378,7 @@ def agent(
         brave_api_key=config.tools.web.search.api_key or None,
         exec_config=config.tools.exec,
         restrict_to_workspace=config.tools.restrict_to_workspace,
+        mcp_servers=mcp_config,
     )
 
     if message:

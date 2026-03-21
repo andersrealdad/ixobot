@@ -59,6 +59,7 @@ class MatrixConfig(BaseModel):
     access_token: str = ""  # Access token for the bot user
     allow_from: list[str] = Field(default_factory=list)  # Allowed Matrix user IDs
     rooms: list[str] = Field(default_factory=list)  # Restrict to these room IDs (empty = all)
+    default_room: str = ""  # Room ID for off-topic redirects (e.g. #Astrid general room)
 
 
 class HttpInboundConfig(BaseModel):
@@ -153,6 +154,15 @@ class LoggingConfig(BaseModel):
     level: str = "WARNING"
 
 
+class McpServerConfig(BaseModel):
+    """Single MCP server connection config."""
+    type: str = "stdio"  # "stdio" or "sse"
+    command: str = ""  # for stdio
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] | None = None
+    url: str = ""  # for sse
+
+
 class Config(BaseSettings):
     """Root configuration for nanobot."""
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
@@ -161,6 +171,7 @@ class Config(BaseSettings):
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    mcp_servers: dict[str, McpServerConfig] = Field(default_factory=dict)
 
     @property
     def workspace_path(self) -> Path:

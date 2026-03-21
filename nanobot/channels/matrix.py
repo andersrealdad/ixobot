@@ -24,8 +24,11 @@ class MatrixChannel(BaseChannel):
     Each room the bot is in becomes a separate chat_id,
     so agents maintain per-room conversation history.
 
-    E2E keys are stored in a per-user store directory so
-    device verification persists across restarts.
+    Supports threading: if a message arrives in a thread,
+    the reply is sent back into the same thread.
+
+    If default_room is configured, off-topic replies can be
+    redirected there via metadata.
     """
 
     name = "matrix"
@@ -35,6 +38,8 @@ class MatrixChannel(BaseChannel):
         self.config: MatrixConfig = config
         self._client: "nio.AsyncClient | None" = None
         self._sync_token: str | None = None
+        # Tracks last sent event_id per room so agent can edit its own messages
+        self._last_sent_event: dict[str, str] = {}
 
     def _store_path(self) -> Path:
         """Per-user E2E key store directory."""
@@ -78,6 +83,9 @@ class MatrixChannel(BaseChannel):
         room_count = len(resp.rooms.join)
         logger.info(f"Matrix: connected, in {room_count} rooms")
 
+        if self.config.default_room:
+            logger.info(f"Matrix: default room set to {self.config.default_room}")
+
         # Sync loop
         while self._running:
             try:
@@ -105,20 +113,45 @@ class MatrixChannel(BaseChannel):
             self._client = None
 
     async def send(self, msg: OutboundMessage) -> None:
-        """Send a message to a Matrix room (auto-encrypts if room is encrypted)."""
+        """Send or edit a Matrix message.
+
+        - Normal send: posts a new message in the room.
+        - Thread reply: if metadata contains thread_event_id, replies in-thread.
+        - Edit: if metadata contains edit_event_id, replaces that message.
+          Use "last" as edit_event_id to edit the last message sent in this room.
+        """
         if not self._client:
             logger.warning("Matrix client not running")
             return
 
-        content = {
+        edit_target = msg.metadata.get("edit_event_id")
+        if edit_target == "last":
+            edit_target = self._last_sent_event.get(msg.chat_id)
+
+        if edit_target:
+            await self._send_edit(msg.chat_id, edit_target, msg.content)
+            return
+
+        content: dict = {
             "msgtype": "m.text",
             "body": msg.content,
             "format": "org.matrix.custom.html",
             "formatted_body": _markdown_to_html(msg.content),
         }
 
+        # Thread reply: attach m.relates_to so the reply lands in the same thread
+        thread_root = msg.metadata.get("thread_event_id")
+        if thread_root:
+            content["m.relates_to"] = {
+                "rel_type": "m.thread",
+                "event_id": thread_root,
+                "is_falling_back": True,
+                "m.in_reply_to": {
+                    "event_id": msg.metadata.get("reply_to_event_id", thread_root),
+                },
+            }
+
         try:
-            # room_send auto-encrypts for E2E rooms when store is configured
             resp = await self._client.room_send(
                 room_id=msg.chat_id,
                 message_type="m.room.message",
@@ -126,8 +159,61 @@ class MatrixChannel(BaseChannel):
             )
             if isinstance(resp, nio.RoomSendError):
                 logger.error(f"Matrix send failed in {msg.chat_id}: {resp.message}")
+            else:
+                # Store event_id so agent can later edit this message
+                self._last_sent_event[msg.chat_id] = resp.event_id
         except Exception as e:
             logger.error(f"Matrix send error: {e}")
+
+    async def _send_edit(self, room_id: str, event_id: str, new_content: str) -> None:
+        """Send an edit (m.replace) for a previously sent message."""
+        if not self._client:
+            return
+
+        html = _markdown_to_html(new_content)
+        content = {
+            "msgtype": "m.text",
+            "body": f"* {new_content}",  # fallback for clients without edit support
+            "format": "org.matrix.custom.html",
+            "formatted_body": f"* {html}",
+            "m.new_content": {
+                "msgtype": "m.text",
+                "body": new_content,
+                "format": "org.matrix.custom.html",
+                "formatted_body": html,
+            },
+            "m.relates_to": {
+                "rel_type": "m.replace",
+                "event_id": event_id,
+            },
+        }
+
+        try:
+            resp = await self._client.room_send(
+                room_id=room_id,
+                message_type="m.room.message",
+                content=content,
+            )
+            if isinstance(resp, nio.RoomSendError):
+                logger.error(f"Matrix edit failed in {room_id}: {resp.message}")
+            else:
+                # Update last sent so subsequent edits chain correctly
+                self._last_sent_event[room_id] = resp.event_id
+                logger.debug(f"Matrix: edited {event_id[:12]}... in {room_id}")
+        except Exception as e:
+            logger.error(f"Matrix edit error: {e}")
+
+    async def send_to_default_room(self, text: str) -> None:
+        """Send a message to the configured default room (e.g. #Astrid)."""
+        if not self.config.default_room:
+            logger.warning("Matrix: no default_room configured, cannot redirect")
+            return
+
+        await self.send(OutboundMessage(
+            channel=self.name,
+            chat_id=self.config.default_room,
+            content=text,
+        ))
 
     async def _on_room_message(
         self, room: "nio.MatrixRoom", event: "nio.RoomMessageText"
@@ -153,7 +239,7 @@ class MatrixChannel(BaseChannel):
     async def _process_message(
         self, room: "nio.MatrixRoom", event: "nio.RoomMessageText"
     ) -> None:
-        """Process a decrypted message."""
+        """Process a decrypted message, extracting thread context."""
         # Ignore own messages
         if event.sender == self.config.user_id:
             return
@@ -169,7 +255,18 @@ class MatrixChannel(BaseChannel):
         if not content:
             return
 
-        logger.debug(f"Matrix [{room.display_name}] {sender_id}: {content[:80]}...")
+        # Extract thread info from raw event source
+        thread_event_id = None
+        source = getattr(event, "source", {}) or {}
+        event_content = source.get("content", {})
+        relates_to = event_content.get("m.relates_to", {})
+        if relates_to.get("rel_type") == "m.thread":
+            thread_event_id = relates_to.get("event_id")
+
+        logger.debug(
+            f"Matrix [{room.display_name}] {sender_id}: {content[:80]}..."
+            + (f" (thread: {thread_event_id[:12]}...)" if thread_event_id else "")
+        )
 
         await self._handle_message(
             sender_id=sender_id,
@@ -180,6 +277,8 @@ class MatrixChannel(BaseChannel):
                 "room_name": room.display_name,
                 "room_id": room_id,
                 "encrypted": room.encrypted,
+                "thread_event_id": thread_event_id,
+                "default_room": self.config.default_room or None,
             },
         )
 
@@ -217,6 +316,32 @@ class MatrixChannel(BaseChannel):
                     if not self._client.olm.is_device_verified(device):
                         self._client.verify_device(device)
                         logger.debug(f"Matrix: trusted device {device.device_id} of {user_id}")
+
+    # --- Room management (used by manage.sh export) ---
+
+    async def create_room(self, name: str, topic: str = "", invite: list[str] | None = None) -> str | None:
+        """Create a Matrix room and optionally invite users.
+
+        Returns the room_id on success, None on failure.
+        """
+        if not self._client:
+            logger.warning("Matrix client not running, cannot create room")
+            return None
+
+        try:
+            resp = await self._client.room_create(
+                name=name,
+                topic=topic,
+                invite=invite or [],
+            )
+            if isinstance(resp, nio.RoomCreateError):
+                logger.error(f"Matrix room creation failed: {resp.message}")
+                return None
+            logger.info(f"Matrix: created room '{name}' → {resp.room_id}")
+            return resp.room_id
+        except Exception as e:
+            logger.error(f"Matrix room creation error: {e}")
+            return None
 
 
 def _markdown_to_html(text: str) -> str:

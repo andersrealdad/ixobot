@@ -46,6 +46,7 @@ class AgentLoop:
         exec_config: "ExecToolConfig | None" = None,
         cron_service: "CronService | None" = None,
         restrict_to_workspace: bool = False,
+        mcp_servers: dict | None = None,
     ):
         from nanobot.config.schema import ExecToolConfig
         from nanobot.cron.service import CronService
@@ -73,6 +74,8 @@ class AgentLoop:
         )
         
         self._running = False
+        self._mcp_servers_config = mcp_servers or {}
+        self._mcp_manager = None
         self._register_default_tools()
     
     def _register_default_tools(self) -> None:
@@ -114,6 +117,10 @@ class AgentLoop:
         """Run the agent loop, processing messages from the bus."""
         self._running = True
         logger.info("Agent loop started")
+
+        # Connect to MCP servers if configured
+        if self._mcp_servers_config:
+            await self._connect_mcp_servers()
         
         while self._running:
             try:
@@ -143,6 +150,22 @@ class AgentLoop:
         """Stop the agent loop."""
         self._running = False
         logger.info("Agent loop stopping")
+
+    async def _connect_mcp_servers(self) -> None:
+        """Connect to configured MCP servers and register their tools."""
+        from nanobot.mcp.client import McpClientManager
+        from nanobot.mcp.bridge import register_mcp_tools
+
+        self._mcp_manager = McpClientManager()
+        await self._mcp_manager.connect_all(self._mcp_servers_config)
+        register_mcp_tools(self._mcp_manager, self.tools)
+
+    @staticmethod
+    def _normalize_tool_name(name: str) -> str:
+        """Strip proxy_ prefix from tool names (CLIProxyAPI cloaking artifact)."""
+        if name.startswith("proxy_"):
+            return name[6:]
+        return name
     
     async def _process_message(self, msg: InboundMessage) -> OutboundMessage | None:
         """
@@ -177,10 +200,21 @@ class AgentLoop:
         if isinstance(cron_tool, CronTool):
             cron_tool.set_context(msg.channel, msg.chat_id)
         
+        # Inject Matrix context hint so agent knows if it's in a thread or room
+        current_message = msg.content
+        if msg.channel == "matrix" and msg.metadata:
+            room_name = msg.metadata.get("room_name", "")
+            if msg.metadata.get("thread_event_id"):
+                context_hint = f"[📍 Tråd i {room_name}]\n" if room_name else "[📍 Tråd]\n"
+            else:
+                context_hint = f"[💬 Rom: {room_name}]\n" if room_name else ""
+            if context_hint:
+                current_message = context_hint + msg.content
+
         # Build initial messages (use get_history for LLM-formatted messages)
         messages = self.context.build_messages(
             history=session.get_history(),
-            current_message=msg.content,
+            current_message=current_message,
             media=msg.media if msg.media else None,
             channel=msg.channel,
             chat_id=msg.chat_id,
@@ -220,9 +254,10 @@ class AgentLoop:
                 
                 # Execute tools
                 for tool_call in response.tool_calls:
+                    tool_name = self._normalize_tool_name(tool_call.name)
                     args_str = json.dumps(tool_call.arguments)
-                    logger.debug(f"Executing tool: {tool_call.name} with arguments: {args_str}")
-                    result = await self.tools.execute(tool_call.name, tool_call.arguments)
+                    logger.debug(f"Executing tool: {tool_name} with arguments: {args_str}")
+                    result = await self.tools.execute(tool_name, tool_call.arguments)
                     messages = self.context.add_tool_result(
                         messages, tool_call.id, tool_call.name, result
                     )
@@ -239,10 +274,17 @@ class AgentLoop:
         session.add_message("assistant", final_content)
         self.sessions.save(session)
         
+        # Propagate thread metadata so channel can reply in-thread
+        out_metadata: dict = {}
+        if msg.metadata.get("thread_event_id"):
+            out_metadata["thread_event_id"] = msg.metadata["thread_event_id"]
+            out_metadata["reply_to_event_id"] = msg.metadata.get("event_id", msg.metadata["thread_event_id"])
+
         return OutboundMessage(
             channel=msg.channel,
             chat_id=msg.chat_id,
-            content=final_content
+            content=final_content,
+            metadata=out_metadata,
         )
     
     async def _process_system_message(self, msg: InboundMessage) -> OutboundMessage | None:
@@ -319,9 +361,10 @@ class AgentLoop:
                 )
                 
                 for tool_call in response.tool_calls:
+                    tool_name = self._normalize_tool_name(tool_call.name)
                     args_str = json.dumps(tool_call.arguments)
-                    logger.debug(f"Executing tool: {tool_call.name} with arguments: {args_str}")
-                    result = await self.tools.execute(tool_call.name, tool_call.arguments)
+                    logger.debug(f"Executing tool: {tool_name} with arguments: {args_str}")
+                    result = await self.tools.execute(tool_name, tool_call.arguments)
                     messages = self.context.add_tool_result(
                         messages, tool_call.id, tool_call.name, result
                     )
