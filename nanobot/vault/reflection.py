@@ -4,28 +4,38 @@ Runs as a scheduled Prefect flow or standalone CLI.
 
   Hourly  — decay vault.memories (decay_score -= 0.005/hr for unpromoted)
   Daily   — promote importance>=7 memories to ixonaut_hub.crystals
-  Weekly  — synthesize memory clusters into insight crystals (TODO)
+  Weekly  — synthesize memory clusters into insight crystals
+            + resurrect decayed memories that match active clusters
 
 Standalone:
     python -m nanobot.vault.reflection promote
     python -m nanobot.vault.reflection decay
+    python -m nanobot.vault.reflection synthesize
     python -m nanobot.vault.reflection status
 """
 
 from __future__ import annotations
 
+import json
 import os
+import sqlite3
 import sys
-from dataclasses import dataclass
+from collections import defaultdict
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+import httpx
 import psycopg2
 import psycopg2.extras
 from loguru import logger
 
 from nanobot.vault.config import (
     EMBED_DIM,
+    EMBED_MODEL,
+    EMBED_URL,
+    LLM_MODEL,
+    LLM_URL,
     PG_DB,
     PG_HOST,
     PG_PORT,
@@ -190,6 +200,373 @@ def run_decay(pg_password: str | None = None) -> int:
         conn.close()
 
 
+# ── Synthesis — cluster memories → insight crystals ───────────────────────
+
+SYNTH_MIN_CLUSTER    = int(os.environ.get("VAULT_SYNTH_MIN_CLUSTER", "4"))
+SYNTH_SIMILARITY     = float(os.environ.get("VAULT_SYNTH_SIMILARITY", "0.7"))
+RESURRECT_DECAY_CEIL = float(os.environ.get("VAULT_RESURRECT_DECAY_CEIL", "0.3"))
+RESURRECT_SIMILARITY = float(os.environ.get("VAULT_RESURRECT_SIMILARITY", "0.65"))
+SHARED_MEMORY_DB     = Path.home() / "shared-data" / "db" / "shared-memory.db"
+
+SYNTH_PROMPT = """You are Jimmy, the Vault Engine memory synthesizer.
+Given a CLUSTER of related memories from the agent system, synthesize them into
+a single crystal — one insight that captures the *pattern* across these memories.
+
+Cluster members:
+{members}
+
+{resurrection_section}
+
+Output a JSON object:
+{{
+  "title": "short title (max 15 words)",
+  "insight": "one paragraph explaining the pattern, why it matters, and what to watch for",
+  "tags": ["relevant", "tags"],
+  "severity": "green|yellow|red"
+}}
+
+Rules:
+- Find the PATTERN, not just a summary. What keeps happening? Why?
+- If resurrected memories are present, this is an UNRESOLVED PATTERN — something
+  that was forgotten but keeps surfacing. Say so explicitly. Severity should be
+  yellow or red.
+- Be direct. One paragraph. No filler.
+
+Output ONLY the JSON object."""
+
+
+@dataclass
+class SynthesisResult:
+    clusters_found: int = 0
+    crystals_created: int = 0
+    memories_consumed: int = 0
+    resurrections: int = 0
+    errors: int = 0
+
+
+def run_synthesis(pg_password: str | None = None) -> SynthesisResult:
+    """Weekly synthesis: cluster related memories → insight crystals.
+
+    1. Build similarity graph from vault.edges
+    2. Find connected components with >= SYNTH_MIN_CLUSTER members
+    3. For each cluster:
+       a. Resurrect: find decayed memories similar to cluster centroid
+       b. LLM-synthesize into a crystal
+       c. Mark members as consumed_by='synthesis'
+       d. Alert Janne on unresolved-pattern crystals
+    """
+    pg_password = pg_password or _get_pg_password()
+    conn = _pg_connect(pg_password)
+    result = SynthesisResult()
+
+    try:
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # 1. Load candidate memories (have embeddings, not consumed, not promoted)
+        cur.execute("""
+            SELECT id, topic, summary, category, importance, tags, agent_id,
+                   decay_score, created_at
+            FROM vault.memories
+            WHERE embedding IS NOT NULL
+              AND consumed_by IS NULL
+              AND promoted_at IS NULL
+              AND summary != ''
+              AND topic != 'unknown'
+            ORDER BY created_at DESC
+        """)
+        candidates = {str(row["id"]): row for row in cur.fetchall()}
+
+        if len(candidates) < SYNTH_MIN_CLUSTER:
+            logger.info(f"Synthesis: only {len(candidates)} candidates, need {SYNTH_MIN_CLUSTER}")
+            return result
+
+        # 2. Load edges between candidates
+        candidate_ids = list(candidates.keys())
+        cur.execute("""
+            SELECT from_id::text, to_id::text, weight
+            FROM vault.edges
+            WHERE from_id::text = ANY(%s)
+              AND to_id::text = ANY(%s)
+              AND weight >= %s
+        """, (candidate_ids, candidate_ids, SYNTH_SIMILARITY))
+
+        edges = cur.fetchall()
+        logger.info(f"Synthesis: {len(candidates)} candidates, {len(edges)} edges above {SYNTH_SIMILARITY}")
+
+        # 3. Find connected components via union-find
+        clusters = _find_clusters(candidates, edges)
+        viable = [c for c in clusters if len(c) >= SYNTH_MIN_CLUSTER]
+        result.clusters_found = len(viable)
+        logger.info(f"Synthesis: {len(viable)} clusters with >= {SYNTH_MIN_CLUSTER} members")
+
+        # 4. Process each cluster
+        for cluster_ids in viable:
+            try:
+                synth = _synthesize_cluster(conn, cur, cluster_ids, candidates)
+                result.crystals_created += 1
+                result.memories_consumed += len(cluster_ids)
+                result.resurrections += synth.get("resurrections", 0)
+                logger.info(
+                    f"Synthesis: created crystal '{synth['title']}' "
+                    f"from {len(cluster_ids)} memories"
+                    + (f" + {synth['resurrections']} resurrected" if synth.get("resurrections") else "")
+                )
+            except Exception as e:
+                conn.rollback()
+                result.errors += 1
+                logger.error(f"Synthesis: cluster failed: {e}")
+
+        conn.commit()
+
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Synthesis run failed: {e}")
+        raise
+    finally:
+        conn.close()
+
+    logger.info(
+        f"Synthesis: done — clusters={result.clusters_found}, "
+        f"crystals={result.crystals_created}, consumed={result.memories_consumed}, "
+        f"resurrected={result.resurrections}, errors={result.errors}"
+    )
+    return result
+
+
+def _find_clusters(
+    candidates: dict[str, dict],
+    edges: list[dict],
+) -> list[list[str]]:
+    """Union-find connected components from edge list."""
+    parent: dict[str, str] = {cid: cid for cid in candidates}
+
+    def find(x: str) -> str:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: str, b: str) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    for edge in edges:
+        fid, tid = str(edge["from_id"]), str(edge["to_id"])
+        if fid in candidates and tid in candidates:
+            union(fid, tid)
+
+    groups: dict[str, list[str]] = defaultdict(list)
+    for cid in candidates:
+        groups[find(cid)].append(cid)
+
+    return list(groups.values())
+
+
+def _synthesize_cluster(
+    conn: psycopg2.extensions.connection,
+    cur: psycopg2.extensions.cursor,
+    cluster_ids: list[str],
+    candidates: dict[str, dict],
+) -> dict:
+    """Synthesize one cluster into a crystal. Returns metadata dict."""
+    members = [candidates[cid] for cid in cluster_ids]
+
+    # ── Resurrection: find decayed memories matching this cluster ──────────
+    resurrected = _resurrect(cur, cluster_ids)
+
+    # ── Build LLM prompt ──────────────────────────────────────────────────
+    member_text = "\n".join(
+        f"- [{m['category']}] {m['topic']}: {m['summary']} "
+        f"(importance={m['importance']}, agent={m['agent_id'] or 'system'}, "
+        f"{m['created_at'].strftime('%Y-%m-%d')})"
+        for m in members
+    )
+
+    resurrection_section = ""
+    if resurrected:
+        resurrection_section = (
+            "RESURRECTED MEMORIES (these decayed/were forgotten but match this cluster):\n"
+            + "\n".join(
+                f"- [RESURRECTED] {r['topic']}: {r['summary']} "
+                f"(decay_score={r['decay_score']:.2f}, {r['created_at'].strftime('%Y-%m-%d')})"
+                for r in resurrected
+            )
+        )
+
+    prompt = SYNTH_PROMPT.format(
+        members=member_text,
+        resurrection_section=resurrection_section,
+    )
+
+    # ── Call LLM ──────────────────────────────────────────────────────────
+    llm_result = _call_llm_sync(prompt)
+    if not llm_result:
+        # Fallback: mechanical synthesis
+        topics = list({m["topic"] for m in members if m["topic"] != "unknown"})
+        llm_result = {
+            "title": f"Cluster: {', '.join(topics[:3])}",
+            "insight": "; ".join(m["summary"][:100] for m in members[:5] if m["summary"]),
+            "tags": ["synthesis", "auto-cluster"],
+            "severity": "yellow" if resurrected else "green",
+        }
+
+    title = (llm_result.get("title") or "Untitled synthesis")[:200]
+    content = llm_result.get("insight") or ""
+    tags = list(llm_result.get("tags") or [])
+    severity = llm_result.get("severity", "green")
+
+    # Tag appropriately
+    for t in ["synthesis", f"cluster-{len(cluster_ids)}"]:
+        if t not in tags:
+            tags.append(t)
+    if resurrected:
+        if "unresolved-pattern" not in tags:
+            tags.append("unresolved-pattern")
+        if "resurrected" not in tags:
+            tags.append("resurrected")
+
+    # ── Compute average embedding for the crystal ─────────────────────────
+    cur.execute("""
+        SELECT avg(embedding)::vector AS centroid
+        FROM vault.memories
+        WHERE id = ANY(%s::uuid[])
+          AND embedding IS NOT NULL
+    """, (cluster_ids,))
+    row = cur.fetchone()
+    centroid = row["centroid"] if row else None
+
+    # ── Insert crystal ────────────────────────────────────────────────────
+    source_ids = ",".join(cluster_ids[:10])
+    source_file = f"synthesis:{source_ids}"
+
+    cur.execute("""
+        INSERT INTO ixonaut_hub.crystals
+            (title, content, source_file, tags, embedding, created_at, updated_at)
+        VALUES (%s, %s, %s, %s, %s, now(), now())
+        RETURNING id
+    """, (title, content, source_file, tags, centroid))
+    crystal_id = cur.fetchone()["id"]
+
+    # ── Mark cluster members as consumed ──────────────────────────────────
+    cur.execute("""
+        UPDATE vault.memories
+        SET consumed_by = 'synthesis', consumed_at = now()
+        WHERE id = ANY(%s::uuid[])
+    """, (cluster_ids,))
+
+    # ── If unresolved pattern, alert Janne via message_bus ────────────────
+    if resurrected:
+        _alert_overseer(
+            f"Unresolved pattern detected: '{title}' — "
+            f"{len(cluster_ids)} active memories clustered with "
+            f"{len(resurrected)} decayed/forgotten memories. "
+            f"Crystal #{crystal_id}. Severity: {severity}."
+        )
+
+    return {
+        "title": title,
+        "crystal_id": crystal_id,
+        "severity": severity,
+        "resurrections": len(resurrected),
+    }
+
+
+def _resurrect(
+    cur: psycopg2.extensions.cursor,
+    cluster_ids: list[str],
+) -> list[dict]:
+    """Find decayed memories whose embeddings are close to the cluster centroid.
+
+    These are the ghosts — things that faded from memory but match what's
+    happening now. If they show up, something was never resolved.
+    """
+    # Compute centroid of active cluster
+    cur.execute("""
+        SELECT avg(embedding)::vector AS centroid
+        FROM vault.memories
+        WHERE id = ANY(%s::uuid[])
+          AND embedding IS NOT NULL
+    """, (cluster_ids,))
+    row = cur.fetchone()
+    if not row or not row["centroid"]:
+        return []
+
+    centroid = row["centroid"]
+
+    # Search for decayed memories similar to centroid
+    cur.execute("""
+        SELECT id, topic, summary, category, importance, decay_score, created_at,
+               1 - (embedding <=> %s::vector) AS similarity
+        FROM vault.memories
+        WHERE decay_score <= %s
+          AND embedding IS NOT NULL
+          AND consumed_by IS NULL
+          AND id != ALL(%s::uuid[])
+          AND summary != ''
+          AND 1 - (embedding <=> %s::vector) >= %s
+        ORDER BY embedding <=> %s::vector
+        LIMIT 10
+    """, (centroid, RESURRECT_DECAY_CEIL, cluster_ids,
+          centroid, RESURRECT_SIMILARITY, centroid))
+
+    resurrected = [dict(r) for r in cur.fetchall()]
+    if resurrected:
+        logger.info(
+            f"Resurrection: {len(resurrected)} decayed memories match cluster — "
+            f"topics: {[r['topic'] for r in resurrected]}"
+        )
+    return resurrected
+
+
+def _call_llm_sync(prompt: str) -> dict | None:
+    """Synchronous LLM call for synthesis."""
+    try:
+        resp = httpx.post(
+            LLM_URL,
+            json={
+                "model": LLM_MODEL,
+                "prompt": prompt,
+                "stream": False,
+                "format": "json",
+                "options": {"temperature": 0.2, "num_predict": 1024},
+            },
+            timeout=120,
+        )
+        resp.raise_for_status()
+        text = resp.json().get("response", "")
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            # Handle wrapper keys
+            for key in ("crystal", "insight", "result", "data"):
+                if key in parsed and isinstance(parsed[key], dict):
+                    return parsed[key]
+            if "title" in parsed:
+                return parsed
+        return None
+    except Exception as e:
+        logger.error(f"Synthesis LLM call failed: {e}")
+        return None
+
+
+def _alert_overseer(message: str) -> None:
+    """Write an alert to message_bus for Janne (overseer)."""
+    try:
+        if not SHARED_MEMORY_DB.exists():
+            return
+        conn = sqlite3.connect(str(SHARED_MEMORY_DB), timeout=5)
+        conn.execute(
+            "INSERT INTO message_bus (from_agent, to_agent, channel, message) "
+            "VALUES (?, ?, ?, ?)",
+            ("jimmy", "overseer", "vault-alerts", message),
+        )
+        conn.commit()
+        conn.close()
+        logger.info(f"Synthesis: alerted overseer — {message[:80]}...")
+    except Exception as e:
+        logger.warning(f"Synthesis: failed to alert overseer: {e}")
+
+
 # ── Status ────────────────────────────────────────────────────────────────────
 
 def print_status(pg_password: str | None = None) -> None:
@@ -287,10 +664,11 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Jimmy Reflection — vault maintenance")
     sub = parser.add_subparsers(dest="cmd")
-    sub.add_parser("promote", help="Promote worthy memories to crystals now")
-    sub.add_parser("decay",   help="Apply decay to unpromoted memories")
-    sub.add_parser("status",  help="Show vault status")
-    sub.add_parser("serve",   help="Register and serve Prefect flows")
+    sub.add_parser("promote",    help="Promote worthy memories to crystals now")
+    sub.add_parser("decay",      help="Apply decay to unpromoted memories")
+    sub.add_parser("synthesize", help="Cluster memories → insight crystals + resurrect")
+    sub.add_parser("status",     help="Show vault status")
+    sub.add_parser("serve",      help="Register and serve Prefect flows")
 
     args = parser.parse_args()
 
@@ -300,6 +678,11 @@ def main() -> None:
     elif args.cmd == "decay":
         n = run_decay()
         print(f"\nDecay applied to {n} memories")
+    elif args.cmd == "synthesize":
+        result = run_synthesis()
+        print(f"\nClusters: {result.clusters_found}  Crystals: {result.crystals_created}  "
+              f"Consumed: {result.memories_consumed}  Resurrected: {result.resurrections}  "
+              f"Errors: {result.errors}")
     elif args.cmd == "status":
         print_status()
     elif args.cmd == "serve":
