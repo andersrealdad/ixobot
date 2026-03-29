@@ -1,14 +1,14 @@
 [project]
-name = "ixo-synth"
-version = "0.2.0"
-description = "Lightweight AI agent framework — build personal assistants that talk, remember, and act."
+name = "ixobot"
+version = "1.0.0"
+description = "IxoBot — AI agent with persistent memory. Built on nanobot."
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
-    {name = "IxoSynth"},
+    {name = "brandfungi"},
     {name = "nanobot contributors"}
 ]
-keywords = ["ai", "agent", "chatbot", "assistant", "framework"]
+keywords = ["ai", "agent", "chatbot", "assistant", "memory", "persistent"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -49,29 +49,35 @@ dev = [
 
 [project.scripts]
 nanobot = "nanobot.cli.commands:app"
+ixobot = "nanobot.cli.commands:app"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["nanobot"]
+packages = ["nanobot", "ixobot"]
 
 [tool.hatch.build.targets.wheel.sources]
 "nanobot" = "nanobot"
+"ixobot" = "ixobot"
 
-# Include non-Python files in skills
+# Include non-Python files in skills and memory schema
 [tool.hatch.build]
 include = [
     "nanobot/**/*.py",
     "nanobot/skills/**/*.md",
     "nanobot/skills/**/*.sh",
+    "ixobot/**/*.py",
+    "ixobot/**/*.sql",
 ]
 
 [tool.hatch.build.targets.sdist]
 include = [
     "nanobot/",
+    "ixobot/",
     "bridge/",
+    "gsd/",
     "README.md",
     "LICENSE",
 ]
