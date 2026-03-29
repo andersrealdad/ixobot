@@ -25,7 +25,7 @@ class ContextBuilder:
         self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace)
     
-    def build_system_prompt(self, skill_names: list[str] | None = None) -> str:
+    def build_system_prompt(self, skill_names: list[str] | None = None, persistent_memory: str = "") -> str:
         """
         Build the system prompt from bootstrap files, memory, and skills.
         
@@ -49,7 +49,11 @@ class ContextBuilder:
         memory = self.memory.get_memory_context()
         if memory:
             parts.append(f"# Memory\n\n{memory}")
-        
+
+        # Persistent memory (IxoBot)
+        if persistent_memory:
+            parts.append(f"# Persistent Memory\n\n{persistent_memory}")
+
         # Skills - progressive loading
         # 1. Always-loaded skills: include full content
         always_skills = self.skills.get_always_skills()
