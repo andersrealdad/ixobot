@@ -42,7 +42,7 @@ A separate long-running pipeline: `VaultWatcher → Compressor → Router`.
 
 | Agent | Role | Channel | Expertise |
 |-------|------|---------|-----------|
-| **astrid** | Sidekick — context, coordination | Matrix, Nextcloud Talk | coordination, orchestration |
+| **astrid** | Sidekick — context, coordination | Matrix,| coordination, orchestration |
 | **dario** | Builder — implements build orders | Gitea, Matrix | implementation, feasibility |
 | **librarian** | Archivist — harvests logs, synthesizes discussions | Matrix | memory, documentation |
 | **robocop** | Enforcer — policy, PR review | Matrix | security, compliance |
