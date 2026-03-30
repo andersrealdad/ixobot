@@ -45,9 +45,27 @@ class NextcloudTalkConfig(BaseModel):
     server_url: str = ""  # e.g. "http://superstation:8082"
     bot_secret: str = ""  # Shared secret from occ talk:bot:install
     port: int = 18793  # Local webhook listener port
-    openclaw_url: str = ""  # e.g. "http://stacks.tailace3a6.ts.net:18789"
+    openclaw_url: str = ""  # e.g. "http://stacks:18789"
     openclaw_token: str = ""  # Gateway auth token
     reply_as: str = "Astrid"  # NC username to post replies as (app password fetched from vault)
+    allow_from: list[str] = Field(default_factory=list)
+
+
+class MatrixConfig(BaseModel):
+    """Matrix channel configuration."""
+    enabled: bool = False
+    homeserver: str = ""  # e.g. "http://superstation:8008"
+    user_id: str = ""  # e.g. "@dario:superstation"
+    access_token: str = ""  # Access token for the bot user
+    allow_from: list[str] = Field(default_factory=list)  # Allowed Matrix user IDs
+    rooms: list[str] = Field(default_factory=list)  # Restrict to these room IDs (empty = all)
+    default_room: str = ""  # Room ID for off-topic redirects (e.g. #Astrid general room)
+
+
+class HttpInboundConfig(BaseModel):
+    """HTTP Inbound channel — receives POST /inbound from Router."""
+    enabled: bool = False
+    port: int = 9881  # HTTP server port
     allow_from: list[str] = Field(default_factory=list)
 
 
@@ -58,6 +76,8 @@ class ChannelsConfig(BaseModel):
     discord: DiscordConfig = Field(default_factory=DiscordConfig)
     feishu: FeishuConfig = Field(default_factory=FeishuConfig)
     nextcloud_talk: NextcloudTalkConfig = Field(default_factory=NextcloudTalkConfig)
+    matrix: MatrixConfig = Field(default_factory=MatrixConfig)
+    http_inbound: HttpInboundConfig = Field(default_factory=HttpInboundConfig)
 
 
 class AgentDefaults(BaseModel):
@@ -134,6 +154,15 @@ class LoggingConfig(BaseModel):
     level: str = "WARNING"
 
 
+class McpServerConfig(BaseModel):
+    """Single MCP server connection config."""
+    type: str = "stdio"  # "stdio" or "sse"
+    command: str = ""  # for stdio
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] | None = None
+    url: str = ""  # for sse
+
+
 class Config(BaseSettings):
     """Root configuration for nanobot."""
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
@@ -142,6 +171,7 @@ class Config(BaseSettings):
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    mcp_servers: dict[str, McpServerConfig] = Field(default_factory=dict)
 
     @property
     def workspace_path(self) -> Path:
@@ -221,6 +251,9 @@ class Config(BaseSettings):
             return self.providers.zhipu.api_base
         if "vllm" in model:
             return self.providers.vllm.api_base
+        # Fallback: return openai api_base if set (custom OpenAI-compatible proxy)
+        if self.providers.openai.api_base:
+            return self.providers.openai.api_base
         return None
     
     class Config:

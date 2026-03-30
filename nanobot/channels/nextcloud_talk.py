@@ -31,7 +31,7 @@ class NextcloudTalkChannel(BaseChannel):
         server_url: str  — e.g. "http://superstation:8082"
         bot_secret: str  — shared secret from `occ talk:bot:install`
         port: int        — local port for webhook listener
-        openclaw_url: str — e.g. "http://stacks.tailace3a6.ts.net:18789"
+        openclaw_url: str — e.g. "http://stacks:18789"
         openclaw_token: str — gateway auth token
         reply_as: str    — NC username to reply as (default: "Astrid")
     """

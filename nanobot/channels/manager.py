@@ -88,6 +88,28 @@ class ChannelManager:
                 logger.info("Nextcloud Talk channel enabled")
             except ImportError as e:
                 logger.warning(f"Nextcloud Talk channel not available: {e}")
+
+        # Matrix channel
+        if self.config.channels.matrix.enabled:
+            try:
+                from nanobot.channels.matrix import MatrixChannel
+                self.channels["matrix"] = MatrixChannel(
+                    self.config.channels.matrix, self.bus
+                )
+                logger.info("Matrix channel enabled")
+            except ImportError as e:
+                logger.warning(f"Matrix channel not available: {e}")
+
+        # HTTP Inbound channel (Router dispatch)
+        if self.config.channels.http_inbound.enabled:
+            try:
+                from nanobot.channels.http_inbound import HttpInboundChannel
+                self.channels["http_inbound"] = HttpInboundChannel(
+                    self.config.channels.http_inbound, self.bus
+                )
+                logger.info("HTTP Inbound channel enabled")
+            except ImportError as e:
+                logger.warning(f"HTTP Inbound channel not available: {e}")
     
     async def start_all(self) -> None:
         """Start WhatsApp channel and the outbound dispatcher."""

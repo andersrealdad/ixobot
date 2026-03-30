@@ -112,8 +112,8 @@ class LiteLLMProvider(LLMProvider):
             model = f"gemini/{model}"
 
         # For vLLM, use hosted_vllm/ prefix per LiteLLM docs
-        # Convert openai/ prefix to hosted_vllm/ if user specified it
-        if self.is_vllm:
+        # Skip if model already has a provider prefix (e.g., openai/) — custom proxy handles routing
+        if self.is_vllm and "/" not in model:
             model = f"hosted_vllm/{model}"
         
         # kimi-k2.5 only supports temperature=1.0
@@ -127,9 +127,11 @@ class LiteLLMProvider(LLMProvider):
             "temperature": temperature,
         }
         
-        # Pass api_base directly for custom endpoints (vLLM, etc.)
+        # Pass api_base and api_key directly for custom endpoints
         if self.api_base:
             kwargs["api_base"] = self.api_base
+        if self.api_key:
+            kwargs["api_key"] = self.api_key
         
         if tools:
             kwargs["tools"] = tools
