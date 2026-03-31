@@ -6,8 +6,12 @@ Standalone script (stdlib only) that automates the arena execution flow:
 parse task -> create sandbox -> run agent-gsd.sh -> collect insights -> post result.
 
 Usage:
-    arena_run.py <task_description_json>
-    arena_run.py /path/to/task.json
+    arena_run.py <task_description_json> [--dry-run] [--keep-sandbox]
+    arena_run.py /path/to/task.json [--dry-run] [--keep-sandbox]
+
+Flags:
+    --dry-run       Skip agent-gsd.sh, generate sample insights, test full flow
+    --keep-sandbox  Preserve sandbox directory after dry-run (default: clean up)
 
 The argument is either a JSON string (from task_queue description field)
 or a path to a file containing the JSON.
@@ -276,37 +280,81 @@ def post_result(
         print(f"Arena: message_bus post failed: {e}", file=sys.stderr)
 
 
+def _generate_dry_run_insights(model: str) -> list[dict]:
+    """Generate sample insights for dry-run mode."""
+    return [
+        {
+            "type": "observation",
+            "text": "Dry-run: sandbox created successfully",
+            "edges": ["instruks.md"],
+            "severity": "info",
+        },
+        {
+            "type": "decision",
+            "text": f"Dry-run: would invoke agent-gsd.sh with model {model}",
+            "edges": ["agent-gsd.sh"],
+            "severity": "info",
+        },
+        {
+            "type": "pattern",
+            "text": "Dry-run: insights.jsonl format validated",
+            "edges": ["insights.jsonl"],
+            "severity": "info",
+        },
+    ]
+
+
 def main() -> None:
     """Orchestrate the full arena execution flow.
 
     Parse task -> create sandbox -> run agent-gsd.sh ->
     collect insights -> write insights -> post result.
 
+    In --dry-run mode, agent-gsd.sh is skipped and sample insights are
+    generated instead. The sandbox is cleaned up after dry-run unless
+    --keep-sandbox is specified.
+
     Always exits 0 (error-resilient pattern).
     """
     try:
-        if len(sys.argv) < 2:
+        # Parse flags from sys.argv
+        args = sys.argv[1:]
+        dry_run = "--dry-run" in args
+        keep_sandbox = "--keep-sandbox" in args
+
+        # Remove flags to get positional args
+        positional = [a for a in args if not a.startswith("--")]
+
+        if not positional:
             print(
-                "Usage: arena_run.py <task_description_json>",
+                "Usage: arena_run.py <task_description_json> [--dry-run] [--keep-sandbox]",
                 file=sys.stderr,
             )
             sys.exit(0)
 
-        task = parse_task(sys.argv[1])
+        task = parse_task(positional[0])
         bo_id = task["bo_id"]
         model = task["model"]
         instruks = task["instruks"]
 
         agent_name = os.environ.get("NANOBOT_AGENT_NAME", "arena-competitor")
 
-        print(f"Arena: starting BO #{bo_id} with {model}")
+        mode_label = " (dry-run)" if dry_run else ""
+        print(f"Arena: starting BO #{bo_id} with {model}{mode_label}")
 
         # Create sandbox
         sandbox = create_sandbox(bo_id, model, instruks)
         print(f"Arena: sandbox at {sandbox}")
 
-        # Run the build
-        exit_code, duration_s = run_agent_gsd(sandbox, bo_id, model)
+        if dry_run:
+            # Skip agent-gsd.sh, simulate a completed run
+            exit_code, duration_s = 0, 5.0
+            print("Arena: dry-run — skipping agent-gsd.sh (simulated 5s completed)")
+            insights = _generate_dry_run_insights(model)
+        else:
+            # Run the real build
+            exit_code, duration_s = run_agent_gsd(sandbox, bo_id, model)
+            insights = collect_insights(sandbox, bo_id, model, exit_code, duration_s)
 
         # Determine status
         if exit_code == 0:
@@ -316,16 +364,27 @@ def main() -> None:
         else:
             status = "error"
 
-        print(f"Arena: agent-gsd.sh exited {exit_code} ({status}) in {round(duration_s)}s")
+        print(f"Arena: exit {exit_code} ({status}) in {round(duration_s)}s")
 
-        # Collect and write insights
-        insights = collect_insights(sandbox, bo_id, model, exit_code, duration_s)
+        # Write insights
         insights_file = write_insights(sandbox, insights)
         print(f"Arena: {len(insights)} insights written to {insights_file}")
 
         # Post result to message_bus
         post_result(agent_name, bo_id, model, status, len(insights), duration_s)
         print(f"Arena: result posted to message_bus (arena-build)")
+
+        # Summary
+        print(f"\nArena run complete: BO #{bo_id} ({model}) -> {status}, "
+              f"{len(insights)} insights, {round(duration_s, 1)}s")
+        print(f"Sandbox: {sandbox}")
+        print(f"Insights: {insights_file}")
+        print(f"Message bus: posted to arena-build channel")
+
+        # Dry-run cleanup
+        if dry_run and not keep_sandbox:
+            shutil.rmtree(sandbox, ignore_errors=True)
+            print(f"Arena: dry-run sandbox cleaned up (use --keep-sandbox to preserve)")
 
     except Exception as e:
         print(f"Arena: fatal error: {e}", file=sys.stderr)
