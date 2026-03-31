@@ -37,11 +37,11 @@ Plans:
   3. Running the skill invokes `agent-gsd.sh` with the correct `OCTOPUS_MODEL` override for the assigned model
   4. Each competitor produces an `insights.jsonl` file with entries containing type, text, edges, severity fields
   5. On completion (or error), the competitor posts its result status to message_bus
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
+- [ ] 02-01-PLAN.md -- Create arena-builder SKILL.md and arena_run.py execution script
+- [ ] 02-02-PLAN.md -- Add dry-run mode, verify message_bus posting, integration test
 
 ### Phase 3: Insight Harvester
 **Goal**: All builder insights are collected, stored in PostgreSQL, and summarized for human review
@@ -62,6 +62,6 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Trigger + Naming | 0/2 | Planned | - |
-| 2. Arena Skill | 0/2 | Not started | - |
+| 1. Trigger + Naming | 2/2 | Complete | 2026-03-31 |
+| 2. Arena Skill | 0/2 | Planned | - |
 | 3. Insight Harvester | 0/2 | Not started | - |
