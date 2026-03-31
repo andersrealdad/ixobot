@@ -25,7 +25,7 @@ Turn every Build Order into a model competition. Phase 1 wires the trigger so Ix
 
 Plans:
 - [x] 01-01-PLAN.md -- Arena trigger: create arena_trigger.py and wire into preflight.sh
-- [ ] 01-02-PLAN.md -- Naming alignment: decide and execute repo naming strategy
+- [x] 01-02-PLAN.md -- Naming alignment: decide and execute repo naming strategy
 
 ### Phase 2: Arena Skill
 **Goal**: Nanobot agents can execute a Build Order in an isolated sandbox and produce structured insights

@@ -58,6 +58,7 @@ Recent decisions affecting current work:
 -
 
 - [Phase 01]: Copied strip_instruks into arena_trigger.py for zero-dependency isolation
+- [Phase 01]: Naming decision: option-b — both remotes renamed to "ixobot" (Gitea: superfuru/ixobot, GitHub: andersrealdad/ixobot). IxoBot = nanobot fork repo, IxoSynth = engine name.
 
 ### Pending Todos
 
