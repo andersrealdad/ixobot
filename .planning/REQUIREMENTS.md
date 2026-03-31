@@ -54,21 +54,21 @@
 
 ## Traceability
 
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| TRIG-01 | Phase 1 | Complete |
-| TRIG-02 | Phase 1 | Complete |
-| TRIG-03 | Phase 1 | Complete |
-| SKIL-01 | Phase 2 | Pending |
-| SKIL-02 | Phase 2 | Pending |
-| SKIL-03 | Phase 2 | Pending |
-| SKIL-04 | Phase 2 | Pending |
-| SKIL-05 | Phase 2 | Pending |
-| HARV-01 | Phase 3 | Pending |
-| HARV-02 | Phase 3 | Pending |
-| HARV-03 | Phase 3 | Pending |
-| HARV-04 | Phase 3 | Pending |
-| NAME-01 | Phase 1 | Pending |
+| Requirement | Description | Phase | Status |
+|-------------|-------------|-------|--------|
+| TRIG-01 | Task created in task_queue on BO claim | Phase 1 | Complete |
+| TRIG-02 | Task includes BO ID, stripped instruks, model assignments | Phase 1 | Complete |
+| TRIG-03 | Trigger is non-blocking — Claude Code continues | Phase 1 | Complete |
+| SKIL-01 | Nanobot skill `arena-builder` with SKILL.md | Phase 2 | Pending |
+| SKIL-02 | Isolated sandbox per competitor | Phase 2 | Pending |
+| SKIL-03 | Runs agent-gsd.sh with OCTOPUS_MODEL override | Phase 2 | Pending |
+| SKIL-04 | Writes insights.jsonl (type, text, edges, severity) | Phase 2 | Pending |
+| SKIL-05 | Posts result status to message_bus | Phase 2 | Pending |
+| HARV-01 | Collect insights from all builders after completion | Phase 3 | Pending |
+| HARV-02 | Store insights in PostgreSQL arena_build_insights | Phase 3 | Pending |
+| HARV-03 | Table: bo_id, model, type, text, edges, severity, timestamp | Phase 3 | Pending |
+| HARV-04 | Summary posted to message_bus with per-model comparison | Phase 3 | Pending |
+| NAME-01 | Align local dir / git remote naming to ixobot | Phase 1 | Pending |
 
 **Coverage:**
 - v1 requirements: 13 total
