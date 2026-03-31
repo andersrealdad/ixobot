@@ -13,10 +13,10 @@
 
 ### Skill
 
-- [ ] **SKIL-01**: Nanobot skill `arena-builder` exists at `nanobot/skills/arena-builder/SKILL.md`
-- [ ] **SKIL-02**: Skill creates isolated sandbox per competitor in `~/shared-data/DEV/garage/workshop/arena-{bo_id}-{model}/`
-- [ ] **SKIL-03**: Skill runs `agent-gsd.sh` with model override (`OCTOPUS_MODEL=qwen3-32b` or `qwen3-8b`)
-- [ ] **SKIL-04**: Skill writes `insights.jsonl` in standardized format per competitor
+- [x] **SKIL-01**: Nanobot skill `arena-builder` exists at `nanobot/skills/arena-builder/SKILL.md`
+- [x] **SKIL-02**: Skill creates isolated sandbox per competitor in `~/shared-data/DEV/garage/workshop/arena-{bo_id}-{model}/`
+- [x] **SKIL-03**: Skill runs `agent-gsd.sh` with model override (`OCTOPUS_MODEL=qwen3-32b` or `qwen3-8b`)
+- [x] **SKIL-04**: Skill writes `insights.jsonl` in standardized format per competitor
 - [ ] **SKIL-05**: Skill captures result (completed/flagged/error) and posts to message_bus
 
 ### Harvester

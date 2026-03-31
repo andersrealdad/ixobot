@@ -40,7 +40,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md -- Create arena-builder SKILL.md and arena_run.py execution script
+- [x] 02-01-PLAN.md -- Create arena-builder SKILL.md and arena_run.py execution script
 - [ ] 02-02-PLAN.md -- Add dry-run mode, verify message_bus posting, integration test
 
 ### Phase 3: Insight Harvester
