@@ -41,7 +41,7 @@ Plans:
 
 Plans:
 - [x] 02-01-PLAN.md -- Create arena-builder SKILL.md and arena_run.py execution script
-- [ ] 02-02-PLAN.md -- Add dry-run mode, verify message_bus posting, integration test
+- [x] 02-02-PLAN.md -- Add dry-run mode, verify message_bus posting, integration test
 
 ### Phase 3: Insight Harvester
 **Goal**: All builder insights are collected, stored in PostgreSQL, and summarized for human review
