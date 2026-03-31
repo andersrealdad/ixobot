@@ -1,4 +1,4 @@
-# IXO-Synth — Claude Code Guide
+# IxoSynth — Claude Code Guide
 
 Fork of [HKUDS/nanobot](https://github.com/HKUDS/nanobot). Branch: `Ixo-nanobot`.
 
@@ -84,7 +84,7 @@ See `nanobot/channels/nextcloud_talk.py` for reference.
 3. Write instructions in markdown body
 4. Optional: add `scripts/`, `references/`, `assets/` subdirectories
 
-## IXO-Synth Additions (over upstream)
+## IxoSynth Additions (over upstream)
 
 - `nanobot/channels/nextcloud_talk.py` — Nextcloud Talk webhook channel
 - `nanobot/agent/tools/qmd.py` — QMD hybrid knowledge search tool
@@ -106,3 +106,68 @@ Config
 ├── tools.restrictToWorkspace    # Sandbox mode
 └── logging.level                # Default WARNING
 ```
+
+## Build Order Rules
+
+**NEVER** skip stations in the buildorder promotion chain. Use `manage.sh`:
+```
+📝 drafted → 🔍 under-review → 🏢 cross-check → ✅ approved → 📋 queued → 🔨 building → 📦 deployed (→ done/)
+```
+Promote: `cd ~/DEV/garage/buildorders && bash manage.sh <action> <id>`
+Template + gate rules: `garage/buildorders/TEMPLATE.md`
+Never manually edit status fields or move files to `done/`.
+
+<!-- GSD:project-start source:PROJECT.md -->
+## Project
+
+**Arena Builder — Competitive BO Execution with Insight Harvesting**
+
+A nanobot skill that triggers parallel model competitions whenever Claude Code starts building a Build Order. Two nanobot agents (running different LLMs via SGLang/Ollama) attempt the same BO in isolated sandboxes simultaneously. All three builders (Claude + 2 competitors) produce structured insights that become training data for model fine-tuning.
+
+**Core Value:** Every Build Order Claude Code executes also produces a structured dataset comparing how different models approach the same problem — turning daily work into continuous model improvement.
+
+### Constraints
+
+- **Isolation:** Competitors MUST run in isolated sandboxes (no access to each other's work)
+- **Cost:** Competitors use local models (Qwen via Ollama/SGLang) — zero API cost
+- **Time:** Competitors get same timeout as Octopus (30 min for GSD mode)
+- **No interference:** Arena runs must not block or slow Claude Code's real build
+<!-- GSD:project-end -->
+
+<!-- GSD:stack-start source:STACK.md -->
+## Technology Stack
+
+Technology stack not yet documented. Will populate after codebase mapping or first phase.
+<!-- GSD:stack-end -->
+
+<!-- GSD:conventions-start source:CONVENTIONS.md -->
+## Conventions
+
+Conventions not yet established. Will populate as patterns emerge during development.
+<!-- GSD:conventions-end -->
+
+<!-- GSD:architecture-start source:ARCHITECTURE.md -->
+## Architecture
+
+Architecture not yet mapped. Follow existing patterns found in the codebase.
+<!-- GSD:architecture-end -->
+
+<!-- GSD:workflow-start source:GSD defaults -->
+## GSD Workflow Enforcement
+
+Before using Edit, Write, or other file-changing tools, start work through a GSD command so planning artifacts and execution context stay in sync.
+
+Use these entry points:
+- `/gsd:quick` for small fixes, doc updates, and ad-hoc tasks
+- `/gsd:debug` for investigation and bug fixing
+- `/gsd:execute-phase` for planned phase work
+
+Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
+<!-- GSD:workflow-end -->
+
+<!-- GSD:profile-start -->
+## Developer Profile
+
+> Profile not yet configured. Run `/gsd:profile-user` to generate your developer profile.
+> This section is managed by `generate-claude-profile` -- do not edit manually.
+<!-- GSD:profile-end -->
