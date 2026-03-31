@@ -21,11 +21,11 @@ Turn every Build Order into a model competition. Phase 1 wires the trigger so Ix
   2. Each task contains the BO ID, stripped instruks, and assigned model (qwen3-32b / qwen3-8b)
   3. Claude Code continues building immediately after trigger fires (no wait, no slowdown)
   4. Local directory and git remote reference a consistent name (ixobot or ixosynth, not mismatched)
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
+- [ ] 01-01-PLAN.md -- Arena trigger: create arena_trigger.py and wire into preflight.sh
+- [ ] 01-02-PLAN.md -- Naming alignment: decide and execute repo naming strategy
 
 ### Phase 2: Arena Skill
 **Goal**: Nanobot agents can execute a Build Order in an isolated sandbox and produce structured insights
@@ -62,6 +62,6 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Trigger + Naming | 0/2 | Not started | - |
+| 1. Trigger + Naming | 0/2 | Planned | - |
 | 2. Arena Skill | 0/2 | Not started | - |
 | 3. Insight Harvester | 0/2 | Not started | - |
