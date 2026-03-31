@@ -24,7 +24,7 @@ Turn every Build Order into a model competition. Phase 1 wires the trigger so Ix
 **Plans:** 2 plans
 
 Plans:
-- [ ] 01-01-PLAN.md -- Arena trigger: create arena_trigger.py and wire into preflight.sh
+- [x] 01-01-PLAN.md -- Arena trigger: create arena_trigger.py and wire into preflight.sh
 - [ ] 01-02-PLAN.md -- Naming alignment: decide and execute repo naming strategy
 
 ### Phase 2: Arena Skill

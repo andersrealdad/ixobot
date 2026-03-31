@@ -7,9 +7,9 @@
 
 ### Trigger
 
-- [ ] **TRIG-01**: When IxoGSD pre-flight claims a BO, a task is created in task_queue targeting arena competitors
-- [ ] **TRIG-02**: Task includes BO ID, stripped instruks (same as Octopus), and model assignments
-- [ ] **TRIG-03**: Trigger is non-blocking — Claude Code continues building without waiting
+- [x] **TRIG-01**: When IxoGSD pre-flight claims a BO, a task is created in task_queue targeting arena competitors
+- [x] **TRIG-02**: Task includes BO ID, stripped instruks (same as Octopus), and model assignments
+- [x] **TRIG-03**: Trigger is non-blocking — Claude Code continues building without waiting
 
 ### Skill
 
@@ -56,9 +56,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TRIG-01 | Phase 1 | Pending |
-| TRIG-02 | Phase 1 | Pending |
-| TRIG-03 | Phase 1 | Pending |
+| TRIG-01 | Phase 1 | Complete |
+| TRIG-02 | Phase 1 | Complete |
+| TRIG-03 | Phase 1 | Complete |
 | SKIL-01 | Phase 2 | Pending |
 | SKIL-02 | Phase 2 | Pending |
 | SKIL-03 | Phase 2 | Pending |
