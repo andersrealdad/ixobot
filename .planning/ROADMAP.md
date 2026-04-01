@@ -84,11 +84,10 @@ Plans:
   1. harvest_insights.py is triggered automatically after arena runs complete (cron, heartbeat, or Prefect flow)
   2. REQUIREMENTS.md traceability table shows correct statuses matching checkbox state
   3. NAME-01 checkbox is marked complete in traceability table
-**Plans**: TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 05-01: TBD
-- [ ] 05-02: TBD
+- [ ] 05-01-PLAN.md -- Harvester auto-trigger + traceability table fix
 
 ## Progress
 
@@ -98,4 +97,4 @@ Plans:
 | 2. Arena Skill | 2/2 | Complete | 2026-04-01 |
 | 3. Insight Harvester | 2/2 | Complete | 2026-04-01 |
 | 4. Arena Provisioning | 0/2 | Not started | - |
-| 5. Ops Polish | 0/2 | Not started | - |
+| 5. Ops Polish | 0/1 | Not started | - |
