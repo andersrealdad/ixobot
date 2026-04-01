@@ -73,7 +73,7 @@ Plans:
 
 Plans:
 - [ ] 04-01-PLAN.md -- Agent provisioning: create runtime configs and identity directories for arena-competitor-a/b
-- [ ] 04-02-PLAN.md -- SQL injection fix: parameterized SQL in harvest_insights.py
+- [x] 04-02-PLAN.md -- SQL injection fix: parameterized SQL in harvest_insights.py
 
 ### Phase 5: Ops Polish
 **Goal**: Operational completeness — harvester runs automatically, traceability is accurate

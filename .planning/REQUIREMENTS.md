@@ -34,7 +34,7 @@
 
 - [ ] **PROV-01**: Agent runtime config exists at `~/agents/arena-competitor-a/config.json` and `~/agents/arena-competitor-b/config.json`
 - [ ] **PROV-02**: Agent identity directories exist at `~/DEV/operations/agent-homes/arena-competitor-a/` and `arena-competitor-b/`
-- [ ] **PROV-03**: harvest_insights.py uses parameterized SQL — no string interpolation of untrusted values
+- [x] **PROV-03**: harvest_insights.py uses parameterized SQL — no string interpolation of untrusted values
 
 ### Ops (Gap Closure)
 
