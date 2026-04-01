@@ -56,7 +56,7 @@ Plans:
 
 Plans:
 - [x] 03-01-PLAN.md -- PostgreSQL migration + harvest_insights.py collector script
-- [ ] 03-02-PLAN.md -- Per-model comparison summary posting + integration test
+- [x] 03-02-PLAN.md -- Per-model comparison summary posting + integration test
 
 ## Progress
 
