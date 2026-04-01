@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-04-01T01:52:39.676Z"
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-04-01T02:14:22.887Z"
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -52,6 +52,7 @@ Plan: 2 of 2
 | Phase 03-insight-harvester P01 | 2min | 2 tasks | 2 files |
 | Phase 03-insight-harvester P02 | 3min | 2 tasks | 1 files |
 | Phase 04-arena-provisioning P02 | 2min | 2 tasks | 1 files |
+| Phase 04-arena-provisioning P01 | 2min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,8 @@ Recent decisions affecting current work:
 - [Phase 03-insight-harvester]: BO completion detection via message_bus count >= 2 per bo_id
 - [Phase 03-insight-harvester]: Summary posted by insight-harvester agent identity to distinguish from arena run results
 - [Phase 04-arena-provisioning]: String concatenation over f-strings for SQL to pass AST injection scanner
+- [Phase 04-arena-provisioning]: Runtime configs use openai provider with CLIProxy at localhost:8317/v1 for Ollama model routing
+- [Phase 04-arena-provisioning]: Minimal identity files (SOUL.md + MEMORY.md only) for arena competitors
 
 ### Pending Todos
 
@@ -82,6 +85,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-01T01:52:39.675Z
-Stopped at: Completed 04-02-PLAN.md
+Last session: 2026-04-01T02:14:22.885Z
+Stopped at: Completed 04-01-PLAN.md
 Resume file: None

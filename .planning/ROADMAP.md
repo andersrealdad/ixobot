@@ -72,7 +72,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 04-01-PLAN.md -- Agent provisioning: create runtime configs and identity directories for arena-competitor-a/b
+- [x] 04-01-PLAN.md -- Agent provisioning: create runtime configs and identity directories for arena-competitor-a/b
 - [x] 04-02-PLAN.md -- SQL injection fix: parameterized SQL in harvest_insights.py
 
 ### Phase 5: Ops Polish
