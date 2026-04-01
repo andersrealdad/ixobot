@@ -149,7 +149,7 @@ def insert_insights(bo_id: str, model: str, insights: list[dict]) -> int:
     if not insights:
         return 0
 
-    sql_lines = []
+    sql_lines: list[str] = []
     for ins in insights:
         # Escape single quotes in text
         text_escaped = ins.get("text", "").replace("'", "''")
@@ -179,6 +179,98 @@ def insert_insights(bo_id: str, model: str, insights: list[dict]) -> int:
     except Exception as e:
         print(f"Harvest: insert error for {bo_id}/{model}: {e}", file=sys.stderr)
         return 0
+
+
+# ---------------------------------------------------------------------------
+# Summary: post per-model comparison to message_bus
+# ---------------------------------------------------------------------------
+
+
+def _build_breakdown(insights: list[dict]) -> tuple[dict[str, int], dict[str, int]]:
+    """Compute type and severity counts for a list of insights."""
+    by_type: dict[str, int] = {}
+    by_severity: dict[str, int] = {}
+    for ins in insights:
+        t = ins.get("type", "unknown")
+        s = ins.get("severity", "info")
+        by_type[t] = by_type.get(t, 0) + 1
+        by_severity[s] = by_severity.get(s, 0) + 1
+    return by_type, by_severity
+
+
+def _format_counts(counts: dict[str, int]) -> str:
+    """Format a dict of counts as 'N key1, N key2, ...'."""
+    return ", ".join(f"{v} {k}" for k, v in sorted(counts.items(), key=lambda x: -x[1]))
+
+
+def post_summary(bo_id: str, model_insights: dict[str, list[dict]], dry_run: bool = False) -> None:
+    """Post a per-model comparison summary to message_bus channel arena-build.
+
+    model_insights: {"qwen3-32b": [list of insight dicts], "qwen3-8b": [list of insight dicts]}
+    In dry-run mode, prints the summary but does not insert into message_bus.
+    """
+    if not model_insights:
+        return
+
+    # Build metadata and message text
+    models_meta: dict[str, dict] = {}
+    lines = [f"Arena Harvest BO #{bo_id} -- Comparison Summary", ""]
+
+    for model, insights in sorted(model_insights.items()):
+        by_type, by_severity = _build_breakdown(insights)
+        total = len(insights)
+
+        models_meta[model] = {
+            "total": total,
+            "by_type": by_type,
+            "by_severity": by_severity,
+        }
+
+        lines.append(f"Model: {model}")
+        lines.append(f"  Total insights: {total}")
+        lines.append(f"  By type: {_format_counts(by_type)}")
+        lines.append(f"  By severity: {_format_counts(by_severity)}")
+        lines.append("")
+
+    # Delta line
+    if len(model_insights) >= 2:
+        sorted_models = sorted(model_insights.items(), key=lambda x: -len(x[1]))
+        top_model, top_insights = sorted_models[0]
+        second_model, second_insights = sorted_models[1]
+        delta = len(top_insights) - len(second_insights)
+        if delta > 0:
+            lines.append(f"Delta: {top_model} produced {delta} more insights")
+        elif delta == 0:
+            lines.append(f"Delta: {top_model} and {second_model} produced equal insights")
+        else:
+            lines.append(f"Delta: {second_model} produced {-delta} more insights")
+
+    message = "\n".join(lines)
+
+    metadata = json.dumps({
+        "bo_id": bo_id,
+        "type": "harvest_summary",
+        "models": models_meta,
+    })
+
+    if dry_run:
+        print(f"\n{message}")
+        print(f"\n  [dry-run] Summary NOT posted to message_bus")
+        return
+
+    try:
+        conn = sqlite3.connect(str(SHARED_MEMORY_DB))
+        conn.execute(
+            "INSERT INTO message_bus "
+            "(from_agent, to_agent, channel, message, metadata) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("insight-harvester", "*", "arena-build", message, metadata),
+        )
+        conn.commit()
+        conn.close()
+        print(f"  Summary posted to message_bus for BO {bo_id}")
+    except Exception as e:
+        print(f"Harvest: summary post failed for {bo_id}: {e}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -226,12 +318,16 @@ def main() -> None:
                 continue
 
             # Collect insights from sandbox dirs
-            model_insights = collect_insights(bo_id)
-            if not model_insights:
+            collected = collect_insights(bo_id)
+            if not collected:
                 print(f"Harvest: no insights found for BO {bo_id}")
                 continue
 
-            for model, insights in model_insights:
+            # Build dict for summary: model -> insights list
+            bo_model_insights: dict[str, list[dict]] = {}
+
+            for model, insights in collected:
+                bo_model_insights[model] = insights
                 if dry_run:
                     print(f"  [dry-run] BO {bo_id} / {model}: {len(insights)} insights")
                     for ins in insights[:3]:
@@ -243,9 +339,11 @@ def main() -> None:
                     print(f"  BO {bo_id} / {model}: {count} insights inserted")
                     total_harvested += count
 
-        # Summary
+            # Post comparison summary for this BO
+            post_summary(bo_id, bo_model_insights, dry_run=dry_run)
+
+        # Final status
         if dry_run:
-            total_found = sum(len(ins) for _, model_ins in [] for _, ins in model_ins)
             print(f"\nHarvest dry-run complete. Use without --dry-run to insert.")
         else:
             print(f"\nHarvest complete: {total_harvested} total insights inserted")
