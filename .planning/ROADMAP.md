@@ -52,16 +52,16 @@ Plans:
   2. Insights are stored in `ixonaut.arena_build_insights` table on stacks:5432
   3. Each row includes bo_id, model, insight_type, text, edges, severity, timestamp, builder_identity
   4. A summary message comparing per-model insights is posted to message_bus channel `arena-build`
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
+- [ ] 03-01-PLAN.md -- PostgreSQL migration + harvest_insights.py collector script
+- [ ] 03-02-PLAN.md -- Per-model comparison summary posting + integration test
 
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Trigger + Naming | 2/2 | Complete | 2026-03-31 |
-| 2. Arena Skill | 0/2 | Planned | - |
-| 3. Insight Harvester | 0/2 | Not started | - |
+| 2. Arena Skill | 2/2 | Complete | 2026-04-01 |
+| 3. Insight Harvester | 0/2 | Planned | - |
