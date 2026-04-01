@@ -69,11 +69,11 @@ Plans:
   1. Agent runtime configs exist at `~/agents/arena-competitor-a/config.json` and `~/agents/arena-competitor-b/config.json`
   2. Agent identity directories exist at `~/DEV/operations/agent-homes/arena-competitor-a/` and `arena-competitor-b/` with minimal SOUL.md
   3. harvest_insights.py uses parameterized SQL (no string interpolation of bo_id/model/severity)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 04-01: TBD
-- [ ] 04-02: TBD
+- [ ] 04-01-PLAN.md -- Agent provisioning: create runtime configs and identity directories for arena-competitor-a/b
+- [ ] 04-02-PLAN.md -- SQL injection fix: parameterized SQL in harvest_insights.py
 
 ### Phase 5: Ops Polish
 **Goal**: Operational completeness — harvester runs automatically, traceability is accurate
