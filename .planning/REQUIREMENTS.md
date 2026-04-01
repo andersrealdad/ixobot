@@ -38,9 +38,9 @@
 
 ### Ops (Gap Closure)
 
-- [ ] **OPS-01**: harvest_insights.py is triggered automatically after arena runs complete
-- [ ] **OPS-02**: REQUIREMENTS.md traceability table matches checkbox state
-- [ ] **OPS-03**: NAME-01 marked complete in traceability table
+- [x] **OPS-01**: harvest_insights.py is triggered automatically after arena runs complete
+- [x] **OPS-02**: REQUIREMENTS.md traceability table matches checkbox state
+- [x] **OPS-03**: NAME-01 marked complete in traceability table
 
 ## v2 Requirements
 
@@ -81,16 +81,16 @@
 | HARV-03 | Table: bo_id, model, type, text, edges, severity, timestamp | Phase 3 | Complete |
 | HARV-04 | Summary posted to message_bus with per-model comparison | Phase 3 | Complete |
 | NAME-01 | Align local dir / git remote naming to ixobot | Phase 1 | Complete |
-| PROV-01 | Agent runtime configs for arena-competitor-a/b | Phase 4 | Pending |
-| PROV-02 | Agent identity directories for competitor agents | Phase 4 | Pending |
-| PROV-03 | Parameterized SQL in harvest_insights.py | Phase 4 | Pending |
-| OPS-01 | Automated trigger for harvest_insights.py | Phase 5 | Pending |
-| OPS-02 | Traceability table matches checkbox state | Phase 5 | Pending |
-| OPS-03 | NAME-01 marked complete in traceability | Phase 5 | Pending |
+| PROV-01 | Agent runtime configs for arena-competitor-a/b | Phase 4 | Complete |
+| PROV-02 | Agent identity directories for competitor agents | Phase 4 | Complete |
+| PROV-03 | Parameterized SQL in harvest_insights.py | Phase 4 | Complete |
+| OPS-01 | Automated trigger for harvest_insights.py | Phase 5 | Complete |
+| OPS-02 | Traceability table matches checkbox state | Phase 5 | Complete |
+| OPS-03 | NAME-01 marked complete in traceability | Phase 5 | Complete |
 
 **Coverage:**
 - v1 requirements: 13 total (all complete)
-- Gap closure requirements: 6 total (pending)
+- Gap closure requirements: 6 total (all complete)
 - Mapped to phases: 19
 - Unmapped: 0
 
