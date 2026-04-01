@@ -10,7 +10,7 @@ Turn every Build Order into a model competition. Phase 1 wires the trigger so Ix
 - [x] **Phase 2: Arena Skill** - Nanobot skill runs two competitors in sandboxes via agent-gsd.sh
 - [x] **Phase 3: Insight Harvester** - Collect, store, and report insights from all builders
 - [ ] **Phase 4: Arena Provisioning** - Create competitor agent instances and fix SQL escaping
-- [ ] **Phase 5: Ops Polish** - Schedule harvester, fix traceability table, NAME-01 checkbox
+- [x] **Phase 5: Ops Polish** - Schedule harvester, fix traceability table, NAME-01 checkbox (completed 2026-04-01)
 
 ## Phase Details
 
@@ -84,10 +84,10 @@ Plans:
   1. harvest_insights.py is triggered automatically after arena runs complete (cron, heartbeat, or Prefect flow)
   2. REQUIREMENTS.md traceability table shows correct statuses matching checkbox state
   3. NAME-01 checkbox is marked complete in traceability table
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 05-01-PLAN.md -- Harvester auto-trigger + traceability table fix
+- [x] 05-01-PLAN.md -- Harvester auto-trigger + traceability table fix
 
 ## Progress
 
@@ -97,4 +97,4 @@ Plans:
 | 2. Arena Skill | 2/2 | Complete | 2026-04-01 |
 | 3. Insight Harvester | 2/2 | Complete | 2026-04-01 |
 | 4. Arena Provisioning | 0/2 | Not started | - |
-| 5. Ops Polish | 0/1 | Not started | - |
+| 5. Ops Polish | 1/1 | Complete   | 2026-04-01 |

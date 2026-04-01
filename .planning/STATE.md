@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-04-01T02:16:15.515Z"
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-04-01T02:33:37.773Z"
 progress:
   total_phases: 5
-  completed_phases: 4
-  total_plans: 8
-  completed_plans: 8
+  completed_phases: 5
+  total_plans: 9
+  completed_plans: 9
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-31)
 
 **Core value:** Every BO Claude Code builds also produces a training dataset from competing models
-**Current focus:** Phase 04 — arena-provisioning
+**Current focus:** Phase 05 — ops-polish
 
 ## Current Position
 
-Phase: 05
-Plan: Not started
+Phase: 05 (ops-polish) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Plan: Not started
 | Phase 03-insight-harvester P02 | 3min | 2 tasks | 1 files |
 | Phase 04-arena-provisioning P02 | 2min | 2 tasks | 1 files |
 | Phase 04-arena-provisioning P01 | 2min | 2 tasks | 6 files |
+| Phase 05-ops-polish P01 | 2min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,7 @@ Recent decisions affecting current work:
 - [Phase 04-arena-provisioning]: String concatenation over f-strings for SQL to pass AST injection scanner
 - [Phase 04-arena-provisioning]: Runtime configs use openai provider with CLIProxy at localhost:8317/v1 for Ollama model routing
 - [Phase 04-arena-provisioning]: Minimal identity files (SOUL.md + MEMORY.md only) for arena competitors
+- [Phase 05-ops-polish]: Non-blocking Popen for harvester trigger after message_bus count >= 2
 
 ### Pending Todos
 
@@ -85,6 +87,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-01T02:14:22.885Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-04-01T02:33:37.772Z
+Stopped at: Completed 05-01-PLAN.md
 Resume file: None
