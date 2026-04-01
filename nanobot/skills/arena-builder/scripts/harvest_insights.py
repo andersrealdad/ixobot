@@ -19,6 +19,7 @@ Always exits 0 (error-resilient).
 """
 
 import json
+import re
 import sqlite3
 import subprocess
 import sys
@@ -27,6 +28,33 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
+
+_IDENTIFIER_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+def _sql_escape(value: str) -> str:
+    """Escape a string value for safe inclusion in a SQL literal (single-quoted).
+
+    Replaces single quotes with doubled quotes and backslashes with doubled
+    backslashes, preventing SQL injection when the caller wraps the result
+    in single quotes for psql.
+    """
+    return value.replace("\\", "\\\\").replace("'", "''")
+
+
+def _sql_escape_identifier(value: str) -> str:
+    """Validate and return a SQL-safe identifier (bo_id, model name, enum value).
+
+    Only allows alphanumeric characters, underscores, and hyphens.
+    Raises ValueError for anything else, blocking injection via identifiers.
+    """
+    if not _IDENTIFIER_RE.match(value):
+        raise ValueError(
+            f"Invalid SQL identifier value: {value!r} — "
+            "only alphanumeric, underscore, and hyphen are allowed"
+        )
+    return value
+
 
 SHARED_DATA = Path.home() / "shared-data"
 WORKSHOP = SHARED_DATA / "DEV" / "garage" / "workshop"
@@ -80,13 +108,19 @@ def find_completed_bos() -> list[str]:
 
 
 def already_harvested(bo_id: str) -> bool:
+    # SQL values escaped -- see _sql_escape() and _sql_escape_identifier()
     """Check if bo_id already has rows in ixonaut.arena_build_insights."""
     try:
+        esc_id = _sql_escape_identifier(bo_id)
+        query = (
+            "SELECT COUNT(*) FROM ixonaut.arena_build_insights"
+            " WHERE bo_id = '" + esc_id + "'"
+        )
         result = subprocess.run(
             [
                 "ssh", "stacks",
-                f"sudo -u postgres psql -d astrid_memory -t -c "
-                f"\"SELECT COUNT(*) FROM ixonaut.arena_build_insights WHERE bo_id = '{bo_id}'\""
+                "sudo -u postgres psql -d astrid_memory -t -c "
+                + '"' + query + '"',
             ],
             capture_output=True, text=True, timeout=15,
         )
@@ -145,24 +179,31 @@ def collect_insights(bo_id: str) -> list[tuple[str, list[dict]]]:
 
 
 def insert_insights(bo_id: str, model: str, insights: list[dict]) -> int:
+    # SQL values escaped -- see _sql_escape() and _sql_escape_identifier()
     """Insert insights into PostgreSQL via psql over ssh. Returns count inserted."""
     if not insights:
         return 0
 
+    esc_id = _sql_escape_identifier(bo_id)
+    esc_mdl = _sql_escape_identifier(model)
+
     sql_lines: list[str] = []
     for ins in insights:
-        # Escape single quotes in text
-        text_escaped = ins.get("text", "").replace("'", "''")
-        edges_json = json.dumps(ins.get("edges", []))
-        severity = ins.get("severity", "info")
-        insight_type = ins.get("type", "observation")
-        builder = f"arena-{model}"
+        esc_text = _sql_escape(ins.get("text", ""))
+        esc_edges = _sql_escape(json.dumps(ins.get("edges", [])))
+        esc_sev = _sql_escape_identifier(ins.get("severity", "info"))
+        esc_type = _sql_escape_identifier(ins.get("type", "observation"))
+        esc_builder = _sql_escape("arena-" + esc_mdl)
 
+        values = (
+            "('" + esc_id + "', '" + esc_mdl + "', '" + esc_type + "', '"
+            + esc_text + "', '" + esc_edges + "'::jsonb, '" + esc_sev
+            + "', '" + esc_builder + "')"
+        )
         sql_lines.append(
-            f"INSERT INTO ixonaut.arena_build_insights "
-            f"(bo_id, model, insight_type, text, edges, severity, builder_identity) "
-            f"VALUES ('{bo_id}', '{model}', '{insight_type}', '{text_escaped}', "
-            f"'{edges_json}'::jsonb, '{severity}', '{builder}');"
+            "INSERT INTO ixonaut.arena_build_insights "
+            "(bo_id, model, insight_type, text, edges, severity, builder_identity) "
+            "VALUES " + values + ";"
         )
 
     sql = "\n".join(sql_lines)
