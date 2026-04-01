@@ -29,6 +29,8 @@ import sys
 import time
 from pathlib import Path
 
+HARVEST_SCRIPT = Path(__file__).parent / "harvest_insights.py"
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -280,6 +282,52 @@ def post_result(
         print(f"Arena: message_bus post failed: {e}", file=sys.stderr)
 
 
+def trigger_harvester(bo_id: str) -> None:
+    """Trigger harvest_insights.py if both competitors have posted results.
+
+    Queries message_bus for arena-build rows matching bo_id (excluding
+    harvest_summary rows posted by the harvester itself). If count >= 2,
+    spawns harvest_insights.py as a non-blocking subprocess via Popen.
+    """
+    if not SHARED_MEMORY_DB.exists():
+        print(f"Arena: shared-memory.db not found, skipping harvester check")
+        return
+
+    try:
+        conn = sqlite3.connect(str(SHARED_MEMORY_DB))
+        rows = conn.execute(
+            "SELECT metadata FROM message_bus WHERE channel = 'arena-build'"
+        ).fetchall()
+        conn.close()
+    except Exception as e:
+        print(f"Arena: harvester check failed (message_bus query): {e}", file=sys.stderr)
+        return
+
+    count = 0
+    for (metadata_str,) in rows:
+        if not metadata_str:
+            continue
+        try:
+            meta = json.loads(metadata_str)
+            # Skip harvest_summary rows (posted by the harvester itself)
+            if meta.get("type") == "harvest_summary":
+                continue
+            if meta.get("bo_id") == bo_id:
+                count += 1
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+    if count >= 2:
+        print(f"Arena: harvester triggered for BO #{bo_id}")
+        subprocess.Popen(
+            [sys.executable, str(HARVEST_SCRIPT), "--bo-id", bo_id],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    else:
+        print(f"Arena: waiting for other competitor ({count}/2 done)")
+
+
 def _generate_dry_run_insights(model: str) -> list[dict]:
     """Generate sample insights for dry-run mode."""
     return [
@@ -373,6 +421,10 @@ def main() -> None:
         # Post result to message_bus
         post_result(agent_name, bo_id, model, status, len(insights), duration_s)
         print(f"Arena: result posted to message_bus (arena-build)")
+
+        # Trigger harvester if both competitors are done (skip in dry-run)
+        if not dry_run:
+            trigger_harvester(bo_id)
 
         # Summary
         print(f"\nArena run complete: BO #{bo_id} ({model}) -> {status}, "
