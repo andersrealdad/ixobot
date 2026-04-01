@@ -21,9 +21,9 @@
 
 ### Harvester
 
-- [ ] **HARV-01**: After all competitors finish, insights from all builders are collected
-- [ ] **HARV-02**: Insights stored in PostgreSQL `ixonaut.arena_build_insights` table
-- [ ] **HARV-03**: Table includes: bo_id, model, insight_type, text, edges, severity, timestamp, builder_identity
+- [x] **HARV-01**: After all competitors finish, insights from all builders are collected
+- [x] **HARV-02**: Insights stored in PostgreSQL `ixonaut.arena_build_insights` table
+- [x] **HARV-03**: Table includes: bo_id, model, insight_type, text, edges, severity, timestamp, builder_identity
 - [ ] **HARV-04**: Summary posted to message_bus channel `arena-build` with per-model comparison
 
 ### Naming
