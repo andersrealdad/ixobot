@@ -28,7 +28,19 @@
 
 ### Naming
 
-- [ ] **NAME-01**: Rename local directory or git remote to align `ixobot` (GitHub) with local workspace
+- [x] **NAME-01**: Rename local directory or git remote to align `ixobot` (GitHub) with local workspace
+
+### Provisioning (Gap Closure)
+
+- [ ] **PROV-01**: Agent runtime config exists at `~/agents/arena-competitor-a/config.json` and `~/agents/arena-competitor-b/config.json`
+- [ ] **PROV-02**: Agent identity directories exist at `~/DEV/operations/agent-homes/arena-competitor-a/` and `arena-competitor-b/`
+- [ ] **PROV-03**: harvest_insights.py uses parameterized SQL — no string interpolation of untrusted values
+
+### Ops (Gap Closure)
+
+- [ ] **OPS-01**: harvest_insights.py is triggered automatically after arena runs complete
+- [ ] **OPS-02**: REQUIREMENTS.md traceability table matches checkbox state
+- [ ] **OPS-03**: NAME-01 marked complete in traceability table
 
 ## v2 Requirements
 
@@ -59,22 +71,29 @@
 | TRIG-01 | Task created in task_queue on BO claim | Phase 1 | Complete |
 | TRIG-02 | Task includes BO ID, stripped instruks, model assignments | Phase 1 | Complete |
 | TRIG-03 | Trigger is non-blocking — Claude Code continues | Phase 1 | Complete |
-| SKIL-01 | Nanobot skill `arena-builder` with SKILL.md | Phase 2 | Pending |
-| SKIL-02 | Isolated sandbox per competitor | Phase 2 | Pending |
-| SKIL-03 | Runs agent-gsd.sh with OCTOPUS_MODEL override | Phase 2 | Pending |
-| SKIL-04 | Writes insights.jsonl (type, text, edges, severity) | Phase 2 | Pending |
-| SKIL-05 | Posts result status to message_bus | Phase 2 | Pending |
-| HARV-01 | Collect insights from all builders after completion | Phase 3 | Pending |
-| HARV-02 | Store insights in PostgreSQL arena_build_insights | Phase 3 | Pending |
-| HARV-03 | Table: bo_id, model, type, text, edges, severity, timestamp | Phase 3 | Pending |
-| HARV-04 | Summary posted to message_bus with per-model comparison | Phase 3 | Pending |
-| NAME-01 | Align local dir / git remote naming to ixobot | Phase 1 | Pending |
+| SKIL-01 | Nanobot skill `arena-builder` with SKILL.md | Phase 2 | Complete |
+| SKIL-02 | Isolated sandbox per competitor | Phase 2 | Complete |
+| SKIL-03 | Runs agent-gsd.sh with OCTOPUS_MODEL override | Phase 2 | Complete |
+| SKIL-04 | Writes insights.jsonl (type, text, edges, severity) | Phase 2 | Complete |
+| SKIL-05 | Posts result status to message_bus | Phase 2 | Complete |
+| HARV-01 | Collect insights from all builders after completion | Phase 3 | Complete |
+| HARV-02 | Store insights in PostgreSQL arena_build_insights | Phase 3 | Complete |
+| HARV-03 | Table: bo_id, model, type, text, edges, severity, timestamp | Phase 3 | Complete |
+| HARV-04 | Summary posted to message_bus with per-model comparison | Phase 3 | Complete |
+| NAME-01 | Align local dir / git remote naming to ixobot | Phase 1 | Complete |
+| PROV-01 | Agent runtime configs for arena-competitor-a/b | Phase 4 | Pending |
+| PROV-02 | Agent identity directories for competitor agents | Phase 4 | Pending |
+| PROV-03 | Parameterized SQL in harvest_insights.py | Phase 4 | Pending |
+| OPS-01 | Automated trigger for harvest_insights.py | Phase 5 | Pending |
+| OPS-02 | Traceability table matches checkbox state | Phase 5 | Pending |
+| OPS-03 | NAME-01 marked complete in traceability | Phase 5 | Pending |
 
 **Coverage:**
-- v1 requirements: 13 total
-- Mapped to phases: 13
+- v1 requirements: 13 total (all complete)
+- Gap closure requirements: 6 total (pending)
+- Mapped to phases: 19
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-31*
-*Last updated: 2026-03-31 after initial definition*
+*Last updated: 2026-04-01 after gap closure planning*

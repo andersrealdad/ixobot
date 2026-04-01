@@ -6,9 +6,11 @@ Turn every Build Order into a model competition. Phase 1 wires the trigger so Ix
 
 ## Phases
 
-- [ ] **Phase 1: Trigger + Naming** - IxoGSD hook spawns arena tasks on BO claim; repo naming aligned
-- [ ] **Phase 2: Arena Skill** - Nanobot skill runs two competitors in sandboxes via agent-gsd.sh
-- [ ] **Phase 3: Insight Harvester** - Collect, store, and report insights from all builders
+- [x] **Phase 1: Trigger + Naming** - IxoGSD hook spawns arena tasks on BO claim; repo naming aligned
+- [x] **Phase 2: Arena Skill** - Nanobot skill runs two competitors in sandboxes via agent-gsd.sh
+- [x] **Phase 3: Insight Harvester** - Collect, store, and report insights from all builders
+- [ ] **Phase 4: Arena Provisioning** - Create competitor agent instances and fix SQL escaping
+- [ ] **Phase 5: Ops Polish** - Schedule harvester, fix traceability table, NAME-01 checkbox
 
 ## Phase Details
 
@@ -58,10 +60,42 @@ Plans:
 - [x] 03-01-PLAN.md -- PostgreSQL migration + harvest_insights.py collector script
 - [x] 03-02-PLAN.md -- Per-model comparison summary posting + integration test
 
+### Phase 4: Arena Provisioning
+**Goal**: Arena competitor agents exist as running nanobot instances that can pick up task_queue entries
+**Depends on**: Phase 2
+**Requirements**: PROV-01, PROV-02, PROV-03
+**Gap Closure:** Closes tech debt from v1.0 audit
+**Success Criteria** (what must be TRUE):
+  1. Agent runtime configs exist at `~/agents/arena-competitor-a/config.json` and `~/agents/arena-competitor-b/config.json`
+  2. Agent identity directories exist at `~/DEV/operations/agent-homes/arena-competitor-a/` and `arena-competitor-b/` with minimal SOUL.md
+  3. harvest_insights.py uses parameterized SQL (no string interpolation of bo_id/model/severity)
+**Plans**: TBD
+
+Plans:
+- [ ] 04-01: TBD
+- [ ] 04-02: TBD
+
+### Phase 5: Ops Polish
+**Goal**: Operational completeness — harvester runs automatically, traceability is accurate
+**Depends on**: Phase 3
+**Requirements**: OPS-01, OPS-02, OPS-03
+**Gap Closure:** Closes tech debt from v1.0 audit
+**Success Criteria** (what must be TRUE):
+  1. harvest_insights.py is triggered automatically after arena runs complete (cron, heartbeat, or Prefect flow)
+  2. REQUIREMENTS.md traceability table shows correct statuses matching checkbox state
+  3. NAME-01 checkbox is marked complete in traceability table
+**Plans**: TBD
+
+Plans:
+- [ ] 05-01: TBD
+- [ ] 05-02: TBD
+
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Trigger + Naming | 2/2 | Complete | 2026-03-31 |
 | 2. Arena Skill | 2/2 | Complete | 2026-04-01 |
-| 3. Insight Harvester | 0/2 | Planned | - |
+| 3. Insight Harvester | 2/2 | Complete | 2026-04-01 |
+| 4. Arena Provisioning | 0/2 | Not started | - |
+| 5. Ops Polish | 0/2 | Not started | - |
